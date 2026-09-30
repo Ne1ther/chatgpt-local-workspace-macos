@@ -22,8 +22,8 @@
 --color-sidebar-accent:var(--sidebar-accent);--color-sidebar-border:var(--sidebar-border);
 --radius-sm:calc(var(--radius) * .6);--radius-md:calc(var(--radius) * .8);
 --radius-lg:var(--radius);--radius-xl:calc(var(--radius) * 1.4);
---font-sans:"Segoe UI","Microsoft YaHei UI",system-ui,sans-serif;
---font-mono:"Cascadia Mono",Consolas,"Microsoft YaHei UI",monospace;
+--font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Segoe UI","Microsoft YaHei UI",system-ui,sans-serif;
+--font-mono:"SFMono-Regular",Menlo,"Cascadia Mono",Consolas,"Microsoft YaHei UI",monospace;
 }
 :root{
 --radius:.625rem;
@@ -31,7 +31,7 @@
 --card:oklch(1 0 0);--card-foreground:oklch(.145 0 0);
 --muted:oklch(.97 0 0);--muted-foreground:oklch(.556 0 0);
 --accent:oklch(.97 0 0);--accent-foreground:oklch(.205 0 0);
---primary:oklch(.52 .1 178);--primary-foreground:oklch(.99 0 0);
+--primary:oklch(.56 .20 255);--primary-foreground:oklch(.99 0 0);
 --secondary:oklch(.97 0 0);--secondary-foreground:oklch(.205 0 0);
 --destructive:oklch(.577 .245 27.3);--success:oklch(.58 .12 168);--warning:oklch(.68 .14 68);
 --border:oklch(.922 0 0);--input:oklch(.922 0 0);--ring:oklch(.6 .08 178);
@@ -39,7 +39,7 @@
 --sidebar-accent:oklch(.955 0 0);--sidebar-border:oklch(.922 0 0);
 --scroll-thumb:color-mix(in oklab,var(--foreground) 16%,transparent);
 /* One accent per call type: the timeline reads by what was done, not by status. */
---call-command:var(--primary);--call-read:oklch(.55 .13 252);--call-write:oklch(.55 .16 302);
+--call-command:var(--success);--call-read:oklch(.55 .13 252);--call-write:oklch(.55 .16 302);
 --call-search:oklch(.6 .11 216);--call-list:oklch(.55 .04 250);--call-git:oklch(.55 .14 268);--call-plan:var(--warning);--call-info:var(--muted-foreground);
 color-scheme:light dark;font:13px/1.5 var(--font-sans);background:var(--background);color:var(--foreground);font-synthesis:none;
 }
@@ -48,7 +48,7 @@ color-scheme:light dark;font:13px/1.5 var(--font-sans);background:var(--backgrou
 --card:oklch(.205 0 0);--card-foreground:oklch(.985 0 0);
 --muted:oklch(.269 0 0);--muted-foreground:oklch(.708 0 0);
 --accent:oklch(.269 0 0);--accent-foreground:oklch(.985 0 0);
---primary:oklch(.72 .11 178);--primary-foreground:oklch(.18 0 0);
+--primary:oklch(.72 .15 255);--primary-foreground:oklch(.18 0 0);
 --secondary:oklch(.269 0 0);--secondary-foreground:oklch(.985 0 0);
 --destructive:oklch(.704 .191 22.2);--success:oklch(.75 .13 168);--warning:oklch(.8 .13 72);
 --border:oklch(1 0 0 / 12%);--input:oklch(1 0 0 / 18%);--ring:oklch(.72 .11 178);

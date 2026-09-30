@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "build:ui": "node scripts/build-dashboard.cjs",
-    "test": "node --test \"tests/*.test.cjs\"",
+    "test": "node scripts/test-platform.cjs",
+    "test:mac": "node --test tests/macos.test.cjs tests/dashboard-ui.test.cjs",
     "test:ui": "node --test tests/dashboard-ui.test.cjs"
   },
   "devDependencies": {

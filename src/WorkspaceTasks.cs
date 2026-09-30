@@ -11,7 +11,7 @@ static class WorkspaceTasks
     sealed class Step { public string step {get;set;} public string status {get;set;} public string evidence {get;set;} }
     sealed class Plan { public string Thread,Path,Explanation,State,Reason,Next; public DateTime Updated; public Step[] Steps; }
     static readonly object Gate=new object();
-    static readonly Dictionary<string,Plan> Plans=new Dictionary<string,Plan>(StringComparer.OrdinalIgnoreCase);
+    static readonly Dictionary<string,Plan> Plans=new Dictionary<string,Plan>(WorkspaceContext.PathComparer);
     static string Key(string path,string thread){return thread+"|"+path;}
     static string Text(IDictionary<string,object> map,string key,string fallback=""){object value;if(!map.TryGetValue(key,out value))return fallback;if(!(value is string))throw new ArgumentException(key+" must be a string");return (string)value;}
     public static object Update(string path,object steps,string explanation,Dictionary<string,object> args)

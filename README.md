@@ -1,5 +1,7 @@
 # ChatGPT 本地工作区插件（Local Workspace）
 
+> **此工作副本包含 macOS 移植。** 原生应用、安装包、功能对应与验证范围见 [README.macos.md](README.macos.md)。下方保留上游 Windows 版本文档。
+
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">

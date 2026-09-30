@@ -40,8 +40,10 @@ public static class PatchEditor
     static string Confine(string root,string relative)
     {
         if(String.IsNullOrWhiteSpace(relative)||Path.IsPathRooted(relative)||relative.IndexOf(':')>=0||relative.IndexOf('\0')>=0)throw Invalid("path must be workspace-relative without ADS: "+relative);
+#if !MACOS
         foreach(string segment in relative.Replace('\\','/').Split('/')){if(segment.Length==0||segment.EndsWith(" ")||segment.EndsWith("." )&&segment!="."&&segment!="..")throw Invalid("ambiguous Windows path: "+relative);string stem=segment.Split('.')[0].ToUpperInvariant();if(new[]{"CON","PRN","AUX","NUL","COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9","LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9"}.Contains(stem))throw Invalid("reserved Windows path");}
-        string full=Path.GetFullPath(Path.Combine(root,relative));if(!full.StartsWith(root.TrimEnd('\\','/')+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw Invalid("path escapes workspace: "+relative);NoLinks(full);return full;
+#endif
+        string full=Path.GetFullPath(Path.Combine(root,relative));if(!full.StartsWith(root.TrimEnd('\\','/')+Path.DirectorySeparatorChar,WorkspaceContext.PathComparison))throw Invalid("path escapes workspace: "+relative);NoLinks(full);return full;
     }
     static string Decode(byte[] bytes,out Encoding encoding,out byte[] bom)
     {
@@ -67,14 +69,22 @@ public static class PatchEditor
     static void CheckOriginal(Edit e){NoLinks(e.Path);if(e.Original==null){if(File.Exists(e.Path)||Directory.Exists(e.Path))throw Invalid("add target already exists: "+e.Path);}else if(!File.Exists(e.Path)||!File.ReadAllBytes(e.Path).SequenceEqual(e.Original))throw Invalid("file changed since validation: "+e.Path);if(e.Destination!=null){NoLinks(e.Destination);if(File.Exists(e.Destination)||Directory.Exists(e.Destination))throw Invalid("move target already exists: "+e.Destination);}}
     public static object Apply(string cwd,string patch)
     {
-        string root=Path.GetFullPath(cwd);if(!Directory.Exists(root))throw Invalid("workspace does not exist");NoLinks(root);var edits=Parse(patch);var paths=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string root=Path.GetFullPath(cwd);
+#if MACOS
+        root=MacPlatform.RealPath(root);
+#endif
+        if(!Directory.Exists(root))throw Invalid("workspace does not exist");NoLinks(root);var edits=Parse(patch);var paths=new HashSet<string>(WorkspaceContext.PathComparer);
         foreach(var e in edits){e.Path=Confine(root,e.Path);if(!paths.Add(e.Path))throw Invalid("multiple actions for same path");if(e.Destination!=null){e.Destination=Confine(root,e.Destination);if(!paths.Add(e.Destination))throw Invalid("overlapping move destination");}
             if(e.Kind=="add"){e.Before="";e.Bytes=new UTF8Encoding(false,true).GetBytes(e.After);}
             else{if(!File.Exists(e.Path))throw Invalid("file does not exist: "+e.Path);if(new FileInfo(e.Path).Length>16*1024*1024)throw Invalid("file too large");e.Original=File.ReadAllBytes(e.Path);Encoding enc;byte[] bom;e.Before=Decode(e.Original,out enc,out bom);e.After=e.Kind=="delete"?"":e.Hunks.Count==0?e.Before:Update(e);e.Bytes=bom.Concat(enc.GetBytes(e.After)).ToArray();}CheckOriginal(e);}
         foreach(var e in edits)CheckOriginal(e);
         var results=new List<object>();var createdDirectories=new List<string>();string temporary=null;string error=null;
         try{foreach(var e in edits){CheckOriginal(e);string target=e.Destination??e.Path;
-                if(e.Kind!="delete"){var missing=new Stack<string>();for(string p=Path.GetDirectoryName(target);!Directory.Exists(p);p=Path.GetDirectoryName(p))missing.Push(p);while(missing.Count>0){string p=missing.Pop();Directory.CreateDirectory(p);createdDirectories.Add(p);}NoLinks(target);temporary=Path.Combine(Path.GetDirectoryName(target),".patch-"+Guid.NewGuid().ToString("N")+".tmp");WriteNew(temporary,e.Bytes);CheckOriginal(e);if(e.Kind=="update")File.Replace(temporary,e.Path,null);else File.Move(temporary,target);temporary=null;}
+                if(e.Kind!="delete"){var missing=new Stack<string>();for(string p=Path.GetDirectoryName(target);!Directory.Exists(p);p=Path.GetDirectoryName(p))missing.Push(p);while(missing.Count>0){string p=missing.Pop();Directory.CreateDirectory(p);createdDirectories.Add(p);}NoLinks(target);temporary=Path.Combine(Path.GetDirectoryName(target),".patch-"+Guid.NewGuid().ToString("N")+".tmp");WriteNew(temporary,e.Bytes);
+#if MACOS
+                if(e.Original!=null)File.SetUnixFileMode(temporary,File.GetUnixFileMode(e.Path));
+#endif
+                CheckOriginal(e);if(e.Kind=="update")File.Replace(temporary,e.Path,null);else File.Move(temporary,target);temporary=null;}
                 if(e.Kind=="delete"||e.Kind=="move")File.Delete(e.Path);
             }}catch(Exception ex){error=ex.Message;}finally{if(temporary!=null&&File.Exists(temporary)){try{File.Delete(temporary);}catch(Exception ex){error=(error??"cleanup failed")+"; temporary file remains: "+temporary+": "+ex.Message;}}for(int i=createdDirectories.Count-1;i>=0;i--){try{if(!Directory.EnumerateFileSystemEntries(createdDirectories[i]).Any())Directory.Delete(createdDirectories[i]);}catch(Exception ex){error=(error??"cleanup failed")+"; directory cleanup failed: "+createdDirectories[i]+": "+ex.Message;}}}
         // Inspect disk after submission so partial writes and failed move deletion are represented honestly.

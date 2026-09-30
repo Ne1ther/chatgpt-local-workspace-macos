@@ -19,8 +19,14 @@ static class WorkspaceDiagnostics
     static bool Probe(string url){try{var req=(HttpWebRequest)WebRequest.Create(url);req.Proxy=null;req.AllowAutoRedirect=false;req.Timeout=1500;using(var response=(HttpWebResponse)req.GetResponse())return response.StatusCode==HttpStatusCode.OK;}catch{return false;}}
     public static object[] Doctor(string tunnel,string key)
     {
-        string exe=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"tunnel-client.exe");
-        if(!File.Exists(exe))return new[]{Check("配置自检","unavailable","未找到同目录的 tunnel-client.exe。")};
+        string exe=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+#if MACOS
+"tunnel-client"
+#else
+"tunnel-client.exe"
+#endif
+);
+        if(!File.Exists(exe))return new[]{Check("配置自检","unavailable","未找到应用内的官方 Tunnel Client。")};
         var result=new List<object>();
         try{
             var info=new ProcessStartInfo(exe,"doctor --json --explain"){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8};
@@ -35,10 +41,10 @@ static class WorkspaceDiagnostics
                     var row=item as Dictionary<string,object>;if(row==null)continue;
                     string id=Convert.ToString(row["id"]),status=Convert.ToString(row["status"]);
                     // Display only known check IDs and statuses, never raw doctor output or URLs.
-                    var labels=new Dictionary<string,string>{{"config_source","配置来源"},{"profile_load","配置读取"},{"tunnel_id","Tunnel ID"},{"control_plane_api_key","运行密钥"},{"api_key","运行密钥"},{"mcp_transport","MCP 传输"},{"mcp_command","本地程序"}};
+                    var labels=new Dictionary<string,string>{{"config_source","配置来源"},{"profile_load","配置读取"},{"tunnel_id","Tunnel ID"},{"control_plane_api_key","运行密钥"},{"api_key","运行密钥"},{"mcp_transport","MCP 传输"},{"mcp_target","MCP 目标"},{"mcp_command_executable","本地程序"},{"mcp_command","本地程序"}};
                     string label;if(labels.TryGetValue(id,out label))result.Add(Check(label,status=="PASS"?"pass":status=="FAIL"?"fail":"unavailable",status=="PASS"?"配置检查通过。":status=="FAIL"?"请检查连接配置中的对应项目。":"当前配置未检查该项目。"));
                 }
-                result.Insert(0,Check("配置自检",Convert.ToString(report["result"])=="pass"?"pass":"fail","由官方 Tunnel Client 检查；不代表宿主已成功调用工具。"));
+                result.Insert(0,Check("配置自检",(Convert.ToString(report["result"])=="pass"||Convert.ToString(report["result"])=="ok")?"pass":"fail","由官方 Tunnel Client 检查；不代表宿主已成功调用工具。"));
             }
         }catch{result.Add(Check("配置自检","fail","无法完成自检，请确认 Tunnel Client 版本及文件完整性。"));}
         return result.ToArray();

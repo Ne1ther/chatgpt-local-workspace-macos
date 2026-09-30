@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>workspace-server</AssemblyName>
+    <DefineConstants>MACOS</DefineConstants>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <NoWarn>SYSLIB0014;SYSLIB0045;SYSLIB0021</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/*.cs" Exclude="../../src/Program.cs;../../src/UiKit.cs;../../src/WorkbenchHost.cs" />
+    <EmbeddedResource Include="../../src/dashboard.html" LogicalName="dashboard.html" />
+  </ItemGroup>
+</Project>

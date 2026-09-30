@@ -60,7 +60,7 @@ static class WorkspaceContracts
         }else if(tool=="create_directory"){p["created"]=boolean;p["exists"]=boolean;required=new[]{"path","created","exists"};}
         else if(tool=="file_info"){p["directory"]=boolean;p["size_bytes"]=Nullable("integer");required=new[]{"path","directory"};}
         else if(tool=="write_file"||tool=="edit_file"){p["diff"]=Type("object");p["created"]=boolean;required=new[]{"path","diff"};}
-        else if(tool=="apply_patch"||tool=="show_changes"){p["files"]=ArrayOf(Type("object"));p["count"]=integer;p["partial"]=boolean;required=new[]{"files","count"};}
+        else if(tool=="apply_patch"||tool=="show_changes"){p["files"]=ArrayOf(Type("object"));p["count"]=integer;p["partial"]=boolean;p["error_code"]=Nullable("string");required=new[]{"files","count"};}
         var error=Shape(new Dictionary<string,object>{{"error_code",str},{"message",str}},"error_code","message");
         return new{type="object",properties=new{tool=new{@enum=new[]{tool}},result=new{anyOf=new[]{Shape(p,required),error}},isError=boolean,thread_id=str,task=Nullable("object")},required=new[]{"tool","result","isError"},additionalProperties=false};
     }

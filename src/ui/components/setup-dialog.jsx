@@ -52,7 +52,7 @@ export function SetupDialog({ open, onOpenChange }) {
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="new-path">工作目录</Label>
-            <Input id="new-path" value={path} onChange={event => setPath(event.target.value)} placeholder="E:/my_space/your-project" />
+            <Input id="new-path" value={path} onChange={event => setPath(event.target.value)} placeholder="/Users/你的用户名/Projects/项目" />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="new-chat">ChatGPT 对话链接（可选）</Label>

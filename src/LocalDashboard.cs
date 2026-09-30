@@ -69,6 +69,9 @@ sealed class LocalDashboard : IDisposable
     static string Quote(string value){string trimmed=value.TrimEnd('\\');return "\""+trimmed+new string('\\',(value.Length-trimmed.Length)*2)+"\"";}
     static void Reveal(string target)
     {
+#if MACOS
+        MacPlatform.Reveal(target);
+#else
         if(target.Length==0||target.IndexOfAny(new[]{'\r','\n','\0','"'})>=0)throw new ArgumentException("无效的路径或地址。");
         Uri url;
         if(Uri.TryCreate(target,UriKind.Absolute,out url)&&(url.Scheme=="http"||url.Scheme=="https"))
@@ -115,8 +118,11 @@ sealed class LocalDashboard : IDisposable
         reveal.IsBackground=true;reveal.SetApartmentState(ApartmentState.STA);reveal.Start();
         if(!reveal.Join(5000))throw new IOException("Windows 打开位置超时，请稍后重试。");
         if(failure!=null)throw failure;
+#endif
     }
+#if !MACOS
     static void Release(object value){if(value!=null&&Marshal.IsComObject(value))Marshal.ReleaseComObject(value);}
+#endif
     static void Send(Stream stream,int status,string type,string body){SendBytes(stream,status,type+"; charset=utf-8",Encoding.UTF8.GetBytes(body));}
     static void SendBytes(Stream stream,int status,string type,byte[] data){string headers="HTTP/1.1 "+status+" "+(status==200?"OK":"Error")+"\r\nContent-Type: "+type+"\r\nContent-Length: "+data.Length+"\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n";byte[] head=Encoding.ASCII.GetBytes(headers);stream.Write(head,0,head.Length);stream.Write(data,0,data.Length);}
     public void Dispose(){stopped=true;listener.Stop();}

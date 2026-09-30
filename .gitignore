@@ -17,3 +17,10 @@ settings.json
 
 # 产品设计链路本地产物（不提交）
 spark-output/
+
+# macOS build tooling and self-contained output
+.tools/
+macos/.build/
+macos/backend/bin/
+macos/backend/obj/
+dist-macos/

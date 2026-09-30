@@ -17,6 +17,8 @@ const ARGS = [
 ];
 
 const CANDIDATES = [
+  { label: 'Chrome (macOS)', path: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
+  { label: 'Edge (macOS)', path: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge' },
   { label: 'bundled chromium', path: null },
   { label: 'Chrome', env: 'PROGRAMFILES', relative: 'Google/Chrome/Application/chrome.exe' },
   { label: 'Chrome (x86)', env: 'PROGRAMFILES(X86)', relative: 'Google/Chrome/Application/chrome.exe' },

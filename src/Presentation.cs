@@ -5,7 +5,13 @@ using System.Collections.Generic;
 
 static class Presentation
 {
-    public static string DisplayPath(string path){return path.Replace('\\','/');}
+    public static string DisplayPath(string path){
+#if MACOS
+        return path;
+#else
+        return path.Replace('\\','/');
+#endif
+    }
     public static object Diff(string before,string after)
     {
         var a=before.Length==0?new string[0]:before.Replace("\r\n","\n").Split('\n');var b=after.Length==0?new string[0]:after.Replace("\r\n","\n").Split('\n');var rows=new List<object>();int prefix=0;
@@ -24,8 +30,8 @@ static class Presentation
         return new{rows=rows,added=added,removed=removed,coarse=coarse,truncated=clipped,identical=before==after};
     }
     sealed class Change {public string Path,Before,After,First,Last;}
-    static readonly Dictionary<string,Change> Changes=new Dictionary<string,Change>(StringComparer.OrdinalIgnoreCase);
+    static readonly Dictionary<string,Change> Changes=new Dictionary<string,Change>(WorkspaceContext.PathComparer);
     static long budget;static int untracked;
     public static void Record(string path,string before,string after){Change old;Changes.TryGetValue(path,out old);long next=budget-(old==null?0:(old.Before.Length+old.After.Length)*2L)+((old==null?before:old.Before).Length+after.Length)*2L;if(next>16*1024*1024){untracked++;if(old!=null){budget-=(old.Before.Length+old.After.Length)*2L;Changes.Remove(path);}return;}var c=old??new Change{Path=path,Before=before,First=DateTime.UtcNow.ToString("o")};c.After=after;c.Last=DateTime.UtcNow.ToString("o");Changes[path]=c;budget=next;}
-    public static object Review(string root){string full=Path.GetFullPath(root).TrimEnd('\\','/');var list=Changes.Values.Where(c=>c.Path.Equals(full,StringComparison.OrdinalIgnoreCase)||c.Path.StartsWith(full+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)).OrderBy(c=>c.Path).ToArray();return new{path=DisplayPath(full),scope="当前插件进程中通过 write_file/edit_file 记录的改动；不包含 shell 或其他程序的修改。",files=list.Take(25).Select(c=>new{path=DisplayPath(c.Path),first_changed=c.First,last_changed=c.Last,diff=Diff(c.Before,c.After)}).ToArray(),count=list.Length,omitted_files=Math.Max(0,list.Length-25),untracked_changes=untracked};}
+    public static object Review(string root){string full=Path.GetFullPath(root).TrimEnd('\\','/');var list=Changes.Values.Where(c=>c.Path.Equals(full,WorkspaceContext.PathComparison)||c.Path.StartsWith(full+Path.DirectorySeparatorChar,WorkspaceContext.PathComparison)).OrderBy(c=>c.Path).ToArray();return new{path=DisplayPath(full),scope="当前插件进程中通过 write_file/edit_file 记录的改动；不包含 shell 或其他程序的修改。",files=list.Take(25).Select(c=>new{path=DisplayPath(c.Path),first_changed=c.First,last_changed=c.Last,diff=Diff(c.Before,c.After)}).ToArray(),count=list.Length,omitted_files=Math.Max(0,list.Length-25),untracked_changes=untracked};}
 }

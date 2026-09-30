@@ -10,7 +10,7 @@ static class WorkspaceActivity
     static readonly object Gate=new object();
     static readonly List<Entry> Entries=new List<Entry>();
     static readonly List<Viewer> Viewers=new List<Viewer>();
-    public static bool Within(string target,string root) { return string.IsNullOrEmpty(root)||target.Equals(root,StringComparison.OrdinalIgnoreCase)||target.StartsWith(root.TrimEnd('/')+"/",StringComparison.OrdinalIgnoreCase); }
+    public static bool Within(string target,string root) { return string.IsNullOrEmpty(root)||target.Equals(root,WorkspaceContext.PathComparison)||target.StartsWith(root.TrimEnd('/')+"/",WorkspaceContext.PathComparison); }
     public static string Begin(string tool,string target,string thread="unassigned",string trace="")
     {
         lock(Gate){var e=new Entry{Id=Guid.NewGuid().ToString("N"),Tool=tool,ThreadId=thread,Trace=trace!=null&&trace.Length>200?trace.Substring(0,200):trace,Target=target,Status="running",Started=DateTime.UtcNow};Entries.Add(e);if(Entries.Count>100)Entries.RemoveAt(0);return e.Id;}
