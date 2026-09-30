@@ -80,7 +80,7 @@ struct OverviewView: View {
                 HStack {
                     Text("基于 CSL19980820 / chatgpt-local-workspace · MIT").font(.caption2).foregroundStyle(.tertiary)
                     Spacer()
-                    Text("2.2.1 · Mac 1.1").font(.caption2.monospacedDigit()).foregroundStyle(.tertiary)
+                    Text("2.2.1 · Mac 1.2").font(.caption2.monospacedDigit()).foregroundStyle(.tertiary)
                 }
             }
             .padding(36).frame(maxWidth: 1040, alignment: .leading).frame(maxWidth: .infinity)

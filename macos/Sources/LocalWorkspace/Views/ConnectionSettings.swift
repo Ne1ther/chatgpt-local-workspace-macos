@@ -28,13 +28,11 @@ struct ConnectionSettings: View {
                 }
                 Section {
                     Toggle("在菜单栏显示", isOn: $store.showMenuBarIcon)
-                        .disabled(store.showMenuBarIcon && !store.showDockIcon)
                     Toggle("在 Dock 显示", isOn: $store.showDockIcon)
-                        .disabled(store.showDockIcon && !store.showMenuBarIcon)
                 } header: {
                     Text("关闭窗口后")
                 } footer: {
-                    Text("关闭窗口后仍保持连接；菜单栏和 Dock 至少保留一个入口。只有选择“退出 Local Workspace”或按 ⌘Q 才结束应用。")
+                    Text("两项可同时开启或关闭。都关闭时，可用 Spotlight 搜索 ChatGPT 或 Codex 打开窗口。关闭窗口后仍保持连接；选择“退出 ChatGPT Codex Workspace”或按 ⌘Q 才结束应用。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped)

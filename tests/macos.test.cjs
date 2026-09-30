@@ -9,7 +9,7 @@ const Ajv = require('ajv');
 
 test('macOS: all 26 tools, isolation, POSIX process lifecycle and MCP compatibility', { timeout: 90000 }, async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-mac-integration-')));
-  const exe = process.env.WORKSPACE_TEST_EXE || path.resolve(__dirname, '../dist-macos/Local Workspace.app/Contents/Resources/Backend/workspace-server');
+  const exe = process.env.WORKSPACE_TEST_EXE || path.resolve(__dirname, '../dist-macos/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server');
   const child = spawn(exe, ['--mcp'], { stdio: ['pipe', 'pipe', 'pipe'], env: {
     ...process.env, WORKSPACE_TUNNEL_ID: 'tunnel_0123456789abcdef0123456789abcdef',
     CONTROL_PLANE_API_KEY: 'sk-offline-config-fixture-not-a-real-key', WORKSPACE_TUNNEL_HEALTH_FILE: ''

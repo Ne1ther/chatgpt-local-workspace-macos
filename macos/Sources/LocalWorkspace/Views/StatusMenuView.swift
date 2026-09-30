@@ -29,7 +29,7 @@ struct StatusMenuView: View {
             openSettings()
             NSApp.activate(ignoringOtherApps: true)
         }
-        Button("退出 Local Workspace") { NSApp.terminate(nil) }
+        Button("退出 ChatGPT Codex Workspace") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 

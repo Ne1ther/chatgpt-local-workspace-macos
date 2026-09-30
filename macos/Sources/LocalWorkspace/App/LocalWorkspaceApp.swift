@@ -6,7 +6,7 @@ struct LocalWorkspaceApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var store = WorkspaceStore()
     var body: some Scene {
-        Window("Local Workspace", id: "main") {
+        Window("ChatGPT Codex Workspace", id: "main") {
             MainWindowRoot(store: store, delegate: delegate)
         }
         .defaultSize(width: 1240, height: 800)
@@ -31,7 +31,7 @@ struct LocalWorkspaceApp: App {
                 Link("原版开源项目", destination: URL(string: "https://github.com/CSL19980820/chatgpt-local-workspace")!)
             }
         }
-        MenuBarExtra("Local Workspace", systemImage: "folder.badge.gearshape", isInserted: $store.showMenuBarIcon) {
+        MenuBarExtra("ChatGPT Codex Workspace", systemImage: "folder.badge.gearshape", isInserted: $store.showMenuBarIcon) {
             StatusMenuView(store: store, delegate: delegate)
         }
         .menuBarExtraStyle(.menu)
@@ -59,7 +59,7 @@ struct LocalWorkspaceApp: App {
     func applicationWillTerminate(_ notification: Notification) { store?.stop() }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        if !hasVisibleWindows { showMainWindow() }
+        showMainWindow()
         return false
     }
     func showMainWindow() {

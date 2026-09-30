@@ -8,13 +8,11 @@ final class WorkspaceStore {
     var state: ConnectionState = .stopped
     var showMenuBarIcon = UserDefaults.standard.object(forKey: "showMenuBarIcon") as? Bool ?? true {
         didSet {
-            if !showMenuBarIcon && !showDockIcon { showMenuBarIcon = true }
             UserDefaults.standard.set(showMenuBarIcon, forKey: "showMenuBarIcon")
         }
     }
     var showDockIcon = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true {
         didSet {
-            if !showDockIcon && !showMenuBarIcon { showDockIcon = true }
             UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
             NSApp.setActivationPolicy(showDockIcon ? .regular : .accessory)
         }
@@ -113,7 +111,7 @@ final class WorkspaceStore {
     private func launch(executable: URL, arguments: [String], environment additions: [String: String] = [:]) throws {
         let launch = resourceURL.appendingPathComponent("workspace-launcher")
         guard FileManager.default.isExecutableFile(atPath: executable.path), FileManager.default.isExecutableFile(atPath: launch.path) else {
-            throw WorkspaceError(message: "应用组件缺失，请重新构建或安装完整的 Local Workspace.app。")
+            throw WorkspaceError(message: "应用组件缺失，请重新构建或安装完整的 ChatGPT Codex Workspace.app。")
         }
         let child = Process()
         child.executableURL = launch

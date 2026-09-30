@@ -8,7 +8,7 @@ case "$MODE" in
 esac
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
-APP_NAME="Local Workspace"
+APP_NAME="ChatGPT Codex Workspace"
 APP_BUNDLE="$ROOT_DIR/dist-macos/$APP_NAME.app"
 BUILD_STAGE="$(mktemp -d "${TMPDIR:-/tmp}/local-workspace-build.XXXXXX")"
 trap 'rm -rf "$BUILD_STAGE"' EXIT

@@ -1,11 +1,11 @@
-# Local Workspace for macOS
+# ChatGPT Codex Workspace for macOS
 
 这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的独立 macOS 移植，基于上游 **2.2.1 / 53f355b**。保留原作者与贡献者的 MIT 许可和署名；不是 OpenAI 官方应用，也不代表上游作者发布。
 
 ## 打开应用
 
 - 当前已在 Apple Silicon Mac 上构建、运行和验证。最低部署目标为 macOS 14；较旧系统和 Intel Mac 未做实机验证。
-- 双击 `dist-macos/Local Workspace.app`，或打开 DMG 后将应用拖入 Applications。
+- 双击 `dist-macos/ChatGPT Codex Workspace.app`，或打开 DMG 后将应用拖入 Applications。
 - 应用内含原生界面、工作台、本地工具和官方 Tunnel Client。**使用时不需要安装 Node、Python 或 .NET。** 执行 Git 工具需要系统已有 Git；执行其他开发命令仍需要用户安装相应软件。
 - 当前安装包为本机 ad-hoc 签名，尚未进行 Developer ID 签名和 Apple 公证，不作为已公证的公开发行包。
 
@@ -23,7 +23,7 @@
 
 ### 后台运行与显示位置
 
-关闭主窗口的红色按钮**不会退出应用或断开连接**，已启动的 Tunnel 和本地任务继续运行。默认同时显示菜单栏图标和 Dock 图标；在“连接设置 → 关闭窗口后”可分别控制，至少要保留一个入口。点击菜单栏图标可打开主窗口、查看连接状态、停止连接或明确退出；Dock 图标也能重新打开主窗口。只有选择“退出 Local Workspace”或按 `⌘Q` 才会结束应用和它拥有的后台进程。“停止连接”只断开本次服务，应用仍留在后台。
+关闭主窗口的红色按钮**不会退出应用或断开连接**，已启动的 Tunnel 和本地任务继续运行。默认同时显示菜单栏图标和 Dock 图标；在“连接设置 → 关闭窗口后”可独立控制，两项可以同时开启或同时关闭。两项都关闭时，用 Spotlight 搜索 ChatGPT 或 Codex，或从 Finder 打开应用，即可恢复同一个进程中的主窗口。点击菜单栏图标可打开主窗口、查看连接状态、停止连接或明确退出；Dock 图标也能重新打开主窗口。只有选择“退出 ChatGPT Codex Workspace”或按 `⌘Q` 才会结束应用和它拥有的后台进程。“停止连接”只断开本次服务，应用仍留在后台。
 
 ## 功能对应
 
@@ -71,7 +71,7 @@ npm test                             # macOS 上运行 Mac 集成与工作台回
 ./script/package_macos.sh             # 生成 DMG、ZIP 和 SHA256SUMS
 ```
 
-后续修改代码或获取 GitHub 更新后，在项目目录运行 `./script/build_and_run.sh --install` 即可更新本机应用。脚本先在临时目录完成构建与签名验证，通过后才替换 `/Applications/Local Workspace.app`；编译失败时，已安装版本仍可用。更新只关闭对应路径中的 Local Workspace，不按进程名停止其他副本。钥匙串中的运行密钥和应用偏好设置独立于 `.app`，更新时保留。
+后续修改代码或获取 GitHub 更新后，在项目目录运行 `./script/build_and_run.sh --install` 即可更新本机应用。脚本先在临时目录完成构建与签名验证，通过后才替换 `/Applications/ChatGPT Codex Workspace.app`；编译失败时，已安装版本仍可用。更新只关闭对应路径中的 ChatGPT Codex Workspace，不按进程名停止其他副本。钥匙串中的运行密钥和应用偏好设置独立于 `.app`，更新时保留。安装器会把同标识的旧 `Local Workspace.app` 迁移为新名称；名称变化不会更改钥匙串或偏好设置。
 
 如果已经构建好，只想安装当前构建，可运行 `./script/install_macos.sh`。需要安装到个人应用目录时，先创建 `~/Applications`，再运行 `./script/install_macos.sh --destination "$HOME/Applications"`。安装器会检查应用标识和签名，拒绝覆盖同名的其他应用或符号链接。更新中如果复制或签名验证失败，会保留或恢复原版应用。
 

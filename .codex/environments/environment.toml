@@ -1,5 +1,5 @@
 version = 1
-name = "Local Workspace macOS"
+name = "ChatGPT Codex Workspace macOS"
 [setup]
 script = ""
 [[actions]]
