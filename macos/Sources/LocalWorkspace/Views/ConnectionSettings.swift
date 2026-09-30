@@ -20,12 +20,24 @@ struct ConnectionSettings: View {
                     Text("运行密钥仅保存在 macOS 钥匙串。不要使用 ChatGPT 密码；此处填写 Tunnel 配置提供的 API Key。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                .disabled(store.running || store.busy)
                 Section("如何获取") {
                     Text("1. 在 OpenAI Platform 创建 Tunnel，获取 Tunnel ID 和运行密钥。\n2. 在 ChatGPT 开发者模式中添加连接，选择该 Tunnel。\n3. 启动本应用的连接，在 ChatGPT 刷新工具列表。")
                         .font(.callout).lineSpacing(5).fixedSize(horizontal: false, vertical: true)
                     Link("打开官方设置指南 ↗", destination: store.supportURL)
                 }
-            }.formStyle(.grouped).disabled(store.running || store.busy)
+                Section {
+                    Toggle("在菜单栏显示", isOn: $store.showMenuBarIcon)
+                        .disabled(store.showMenuBarIcon && !store.showDockIcon)
+                    Toggle("在 Dock 显示", isOn: $store.showDockIcon)
+                        .disabled(store.showDockIcon && !store.showMenuBarIcon)
+                } header: {
+                    Text("关闭窗口后")
+                } footer: {
+                    Text("关闭窗口后仍保持连接；菜单栏和 Dock 至少保留一个入口。只有选择“退出 Local Workspace”或按 ⌘Q 才结束应用。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }.formStyle(.grouped)
             if !store.settingsMessage.isEmpty {
                 Text(store.settingsMessage).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             }
@@ -37,6 +49,6 @@ struct ConnectionSettings: View {
                     .buttonStyle(.borderedProminent).disabled(!store.canConnect || store.running || store.busy)
                     .keyboardShortcut(.defaultAction)
             }
-        }.padding(28).frame(width: 570, height: 550)
+        }.padding(28).frame(width: 570, height: 620)
     }
 }

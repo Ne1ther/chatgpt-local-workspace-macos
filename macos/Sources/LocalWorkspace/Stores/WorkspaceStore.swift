@@ -6,6 +6,19 @@ import Observation
 final class WorkspaceStore {
     var destination: Destination? = .overview
     var state: ConnectionState = .stopped
+    var showMenuBarIcon = UserDefaults.standard.object(forKey: "showMenuBarIcon") as? Bool ?? true {
+        didSet {
+            if !showMenuBarIcon && !showDockIcon { showMenuBarIcon = true }
+            UserDefaults.standard.set(showMenuBarIcon, forKey: "showMenuBarIcon")
+        }
+    }
+    var showDockIcon = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true {
+        didSet {
+            if !showDockIcon && !showMenuBarIcon { showDockIcon = true }
+            UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
+            NSApp.setActivationPolicy(showDockIcon ? .regular : .accessory)
+        }
+    }
     var tunnelID = UserDefaults.standard.string(forKey: "tunnelID") ?? ""
     var apiKey = ""
     var settingsMessage = ""
