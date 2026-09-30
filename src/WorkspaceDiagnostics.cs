@@ -31,6 +31,8 @@ static class WorkspaceDiagnostics
         try{
             var info=new ProcessStartInfo(exe,"doctor --json --explain"){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8};
             info.EnvironmentVariables["CONTROL_PLANE_TUNNEL_ID"]=tunnel??"";info.EnvironmentVariables["CONTROL_PLANE_API_KEY"]=key??"";
+            info.EnvironmentVariables["HEALTH_LISTEN_ADDR"]="127.0.0.1:0";
+            info.EnvironmentVariables.Remove("HEALTH_UNIX_SOCKET");
             info.EnvironmentVariables["MCP_COMMAND"]="\""+System.Windows.Forms.Application.ExecutablePath.Replace('\\','/')+"\" --mcp";
             foreach(string name in new[]{"TUNNEL_CLIENT_CONFIG","TUNNEL_CLIENT_PROFILE","TUNNEL_CLIENT_PROFILE_FILE","MCP_SERVER_URL"})info.EnvironmentVariables.Remove(name);
             using(var process=Process.Start(info)){

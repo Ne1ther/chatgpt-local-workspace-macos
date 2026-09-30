@@ -39,8 +39,9 @@ public static class PatchEditor
     }
     static string Confine(string root,string relative)
     {
-        if(String.IsNullOrWhiteSpace(relative)||Path.IsPathRooted(relative)||relative.IndexOf(':')>=0||relative.IndexOf('\0')>=0)throw Invalid("path must be workspace-relative without ADS: "+relative);
+        if(String.IsNullOrWhiteSpace(relative)||Path.IsPathRooted(relative)||relative.IndexOf('\0')>=0)throw Invalid("path must be workspace-relative: "+relative);
 #if !MACOS
+        if(relative.IndexOf(':')>=0)throw Invalid("path must be workspace-relative without ADS: "+relative);
         foreach(string segment in relative.Replace('\\','/').Split('/')){if(segment.Length==0||segment.EndsWith(" ")||segment.EndsWith("." )&&segment!="."&&segment!="..")throw Invalid("ambiguous Windows path: "+relative);string stem=segment.Split('.')[0].ToUpperInvariant();if(new[]{"CON","PRN","AUX","NUL","COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9","LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9"}.Contains(stem))throw Invalid("reserved Windows path");}
 #endif
         string full=Path.GetFullPath(Path.Combine(root,relative));if(!full.StartsWith(root.TrimEnd('\\','/')+Path.DirectorySeparatorChar,WorkspaceContext.PathComparison))throw Invalid("path escapes workspace: "+relative);NoLinks(full);return full;
@@ -78,6 +79,8 @@ public static class PatchEditor
             if(e.Kind=="add"){e.Before="";e.Bytes=new UTF8Encoding(false,true).GetBytes(e.After);}
             else{if(!File.Exists(e.Path))throw Invalid("file does not exist: "+e.Path);if(new FileInfo(e.Path).Length>16*1024*1024)throw Invalid("file too large");e.Original=File.ReadAllBytes(e.Path);Encoding enc;byte[] bom;e.Before=Decode(e.Original,out enc,out bom);e.After=e.Kind=="delete"?"":e.Hunks.Count==0?e.Before:Update(e);e.Bytes=bom.Concat(enc.GetBytes(e.After)).ToArray();}CheckOriginal(e);}
         foreach(var e in edits)CheckOriginal(e);
+        if(edits.Sum(e=>(long)(e.Original==null?0:e.Original.Length)+(e.Bytes==null?0:e.Bytes.Length))>48L*1024*1024)throw Invalid("change exceeds 48 MiB history budget; split the patch");
+        string changeId=WorkspaceJournal.Begin("apply_patch",paths);
         var results=new List<object>();var createdDirectories=new List<string>();string temporary=null;string error=null;
         try{foreach(var e in edits){CheckOriginal(e);string target=e.Destination??e.Path;
                 if(e.Kind!="delete"){var missing=new Stack<string>();for(string p=Path.GetDirectoryName(target);!Directory.Exists(p);p=Path.GetDirectoryName(p))missing.Push(p);while(missing.Count>0){string p=missing.Pop();Directory.CreateDirectory(p);createdDirectories.Add(p);}NoLinks(target);temporary=Path.Combine(Path.GetDirectoryName(target),".patch-"+Guid.NewGuid().ToString("N")+".tmp");WriteNew(temporary,e.Bytes);
@@ -87,9 +90,10 @@ public static class PatchEditor
                 CheckOriginal(e);if(e.Kind=="update")File.Replace(temporary,e.Path,null);else File.Move(temporary,target);temporary=null;}
                 if(e.Kind=="delete"||e.Kind=="move")File.Delete(e.Path);
             }}catch(Exception ex){error=ex.Message;}finally{if(temporary!=null&&File.Exists(temporary)){try{File.Delete(temporary);}catch(Exception ex){error=(error??"cleanup failed")+"; temporary file remains: "+temporary+": "+ex.Message;}}for(int i=createdDirectories.Count-1;i>=0;i--){try{if(!Directory.EnumerateFileSystemEntries(createdDirectories[i]).Any())Directory.Delete(createdDirectories[i]);}catch(Exception ex){error=(error??"cleanup failed")+"; directory cleanup failed: "+createdDirectories[i]+": "+ex.Message;}}}
+        if(!WorkspaceJournal.Finish(changeId))changeId=null;
         // Inspect disk after submission so partial writes and failed move deletion are represented honestly.
         foreach(var e in edits){foreach(string path in e.Destination==null?new[]{e.Path}:new[]{e.Path,e.Destination}){string before=path==e.Path?e.Before:"";string after="";try{if(File.Exists(path)){Encoding enc;byte[] bom;after=Decode(File.ReadAllBytes(path),out enc,out bom);}}catch(Exception ex){if(error==null)error=ex.Message;continue;}bool existed=path==e.Path&&e.Original!=null;bool exists=File.Exists(path);if(before==after&&existed==exists)continue;Presentation.Record(path,before,after);results.Add(new{path=Presentation.DisplayPath(path),operation=!exists?"delete":!existed?"add":"update",previous_path=e.Destination!=null?Presentation.DisplayPath(e.Path):null,diff=Presentation.Diff(before,after)});}}
         if(error==null){results=edits.Select(e=>(object)new{path=Presentation.DisplayPath(e.Destination??e.Path),operation=e.Kind,previous_path=e.Destination==null?null:Presentation.DisplayPath(e.Path),diff=Presentation.Diff(e.Before,e.After)}).ToList();}
-        return new Dictionary<string,object>{{"path",Presentation.DisplayPath(root)},{"files",results},{"count",results.Count},{"error",error},{"error_code",error==null?null:"PATCH_WRITE_FAILED"},{"partial",error!=null&&results.Count>0},{"rollback",error==null?null:"not_attempted"},{"atomic",false}};
+        return new Dictionary<string,object>{{"change_id",changeId},{"path",Presentation.DisplayPath(root)},{"files",results},{"count",results.Count},{"error",error},{"error_code",error==null?null:"PATCH_WRITE_FAILED"},{"partial",error!=null&&results.Count>0},{"rollback",error==null?null:"not_attempted"},{"atomic",false}};
     }
 }

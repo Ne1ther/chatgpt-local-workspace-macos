@@ -21,16 +21,22 @@ struct ActivityView: View {
                     Text("未归属").tag("unassigned")
                     ForEach(store.conversations) { Text($0.title).tag($0.id) }
                 }
-                .frame(maxWidth: 320)
+                .frame(maxWidth: 260)
                 Spacer(minLength: 8)
                 if store.snapshotStale {
                     Label("保留上次记录", systemImage: "exclamationmark.circle")
                         .foregroundStyle(.secondary)
                         .help("连接失效，当前显示的是上次读取的记录")
                 } else {
-                    Text("\(rows.count) 条调用 · 当前进程")
+                    Text("\(rows.count) 条记录 · 最多 \(WorkspaceCore.activityLimit) 条")
                         .foregroundStyle(.secondary)
                 }
+                Button("复制", systemImage: "doc.on.doc") { copySelection() }
+                    .disabled(rows.isEmpty)
+                    .help("复制选中记录；未选择时复制当前显示的记录")
+                Button("清空", systemImage: "trash") { selection = nil; store.clearActivity() }
+                    .disabled(store.activity.isEmpty)
+                    .help("仅清空当前操作记录列表，不删除已保存的文件历史")
             }
             .font(.caption)
             .controlSize(.small)
@@ -44,7 +50,7 @@ struct ActivityView: View {
                           systemImage: search.isEmpty && thread.isEmpty ? "clock.arrow.circlepath" : "magnifyingglass")
                 } description: {
                     Text(search.isEmpty && thread.isEmpty
-                         ? "连接后，工具调用会自动出现在这里。"
+                         ? "连接后，连接状态与工具调用会自动出现在这里。"
                          : "尝试更换对话，或搜索其他工具与路径。")
                 }
             } else {
@@ -54,7 +60,7 @@ struct ActivityView: View {
                     }.width(82)
                     TableColumn("工具") {
                         Text($0.tool).lineLimit(1).help($0.tool)
-                    }.width(min: 144, ideal: 180, max: 208)
+                    }.width(min: 132, ideal: 160, max: 208)
                     TableColumn("目标") {
                         Text($0.target).lineLimit(1).truncationMode(.middle).help($0.target)
                     }
@@ -68,14 +74,26 @@ struct ActivityView: View {
                 }
                 .contextMenu(forSelectionType: String.self) { ids in
                     Button("复制记录", systemImage: "doc.on.doc") {
-                        store.copy(rows.filter { ids.contains($0.id) }.map {
-                            "\($0.startedAt)  \($0.tool)  \($0.target)  \($0.statusLabel)"
-                        }.joined(separator: "\n"))
+                        store.copy(rows.filter { ids.contains($0.id) }.map(\.copyText).joined(separator: "\n"))
                     }
-                    Button("在工作台查看", systemImage: "rectangle.3.group") { store.destination = .workbench }
+                    Button("在工作台查看", systemImage: "rectangle.3.group") {
+                        store.reviewActivity(rows.first { ids.contains($0.id) })
+                    }
+                    .disabled(store.dashboardURL == nil || !rows.contains { ids.contains($0.id) && !$0.isConnectionEvent })
+                } primaryAction: { ids in
+                    store.copy(rows.filter { ids.contains($0.id) }.map(\.copyText).joined(separator: "\n"))
+                    store.reviewActivity(rows.first { ids.contains($0.id) })
+                }
+                .onCopyCommand {
+                    let text = rows.filter { selection == nil || $0.id == selection }.map(\.copyText).joined(separator: "\n")
+                    return text.isEmpty ? [] : [NSItemProvider(object: text as NSString)]
                 }
             }
         }
         .searchable(text: $search, prompt: "搜索工具或路径")
+    }
+
+    private func copySelection() {
+        store.copy(rows.filter { selection == nil || $0.id == selection }.map(\.copyText).joined(separator: "\n"))
     }
 }

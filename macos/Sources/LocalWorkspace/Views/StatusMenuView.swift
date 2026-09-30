@@ -15,6 +15,8 @@ struct StatusMenuView: View {
             store.destination = .workbench
             showWindow()
         }
+        Button("打开 Tunnel 状态页", systemImage: "network") { store.openTunnelStatus() }
+            .disabled(store.tunnelStatusURL == nil)
         if store.running || store.busy {
             Button("停止连接", systemImage: "stop.circle") { store.stop() }
         } else {

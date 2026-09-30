@@ -5,11 +5,11 @@ struct OverviewView: View {
     @Environment(\.openSettings) private var openSettings
     private let features: [(String, String, String)] = [
         ("folder", "文件与搜索", "浏览目录、读取文件与图片、搜索内容，导入聊天附件。"),
-        ("square.and.pencil", "编辑与补丁", "精确替换与多文件修改，清晰查看修改前后的差异。"),
-        ("terminal", "命令会话", "运行 zsh 或 Bash，持续读取输出、发送输入与停止命令。"),
-        ("arrow.triangle.branch", "Git 审阅", "查看工作区状态与暂存差异，不会自行提交或推送。"),
+        ("square.and.pencil", "编辑与历史恢复", "预演与版本检查，保存直接文件修改历史，支持撤销与重做。"),
+        ("terminal", "命令会话", "运行 zsh 或 Bash，防止重试重复执行，分页读取长输出。"),
+        ("arrow.triangle.branch", "Git 审阅", "按审阅基准查看修改与暂存差异，不会自行提交或推送。"),
         ("checklist", "计划与验证", "跟踪任务进展、登记验证结果，检查剩余工作。"),
-        ("clock.arrow.circlepath", "实时工作台", "按对话查看工具调用、日志、图片和命令输出。")
+        ("clock.arrow.circlepath", "实时工作台", "按对话查看调用与输出，本地保存计划、对话与近期记录。")
     ]
 
     var body: some View {
@@ -36,7 +36,7 @@ struct OverviewView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("你的本地工作区").font(.title3.weight(.semibold))
                         Spacer()
-                        Text("26 个工具").font(.caption).foregroundStyle(.secondary)
+                        Text("\(WorkspaceCore.toolCount) 个工具").font(.caption).foregroundStyle(.secondary)
                     }
                     WorkspaceCard {
                         LazyVGrid(
@@ -151,7 +151,7 @@ struct OverviewView: View {
         return "填写 Tunnel ID 与运行密钥即可连接，也可以先检查本地工具。"
     }
     private var versionLabel: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.2"
-        return "Mac \(version) · 核心 2.2.1"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.3"
+        return "Mac \(version) · 核心 \(store.coreVersion)"
     }
 }

@@ -21,7 +21,7 @@ struct ContentView: View {
                 Divider()
                 VStack(alignment: .leading, spacing: 12) {
                     StatusLabel(state: store.state)
-                    Text("26 个工具 · macOS")
+                    Text("\(WorkspaceCore.toolCount) 个工具 · macOS")
                         .font(.caption).foregroundStyle(.secondary)
                     SettingsLink {
                         Label("连接与显示", systemImage: "slider.horizontal.3")
@@ -53,6 +53,9 @@ struct ContentView: View {
                     }
                     .help("诊断连接")
                     Menu {
+                        Button("打开 Tunnel 状态页", systemImage: "network") { store.openTunnelStatus() }
+                            .disabled(store.tunnelStatusURL == nil)
+                        Divider()
                         Button("刷新工作台", systemImage: "arrow.clockwise") { store.refreshDashboard() }
                             .disabled(store.dashboardURL == nil)
                         Button("复制工作台链接", systemImage: "link") {
@@ -64,6 +67,8 @@ struct ContentView: View {
                             store.copy(store.logs.map(\.text).joined(separator: "\n"))
                         }
                         Button("清空日志", systemImage: "trash") { store.logs.removeAll() }
+                        Button("清空操作记录", systemImage: "clock.arrow.circlepath") { store.clearActivity() }
+                            .disabled(store.activity.isEmpty)
                     } label: {
                         Label("更多", systemImage: "ellipsis.circle")
                     }
@@ -80,11 +85,12 @@ struct ContentView: View {
                 }
             }
         }
-        .sheet(isPresented: Binding(get: { store.diagnostics != nil }, set: { if !$0 { store.diagnostics = nil } })) {
+        .sheet(isPresented: Binding(get: { store.diagnostics != nil }, set: { if !$0 { store.closeDiagnostics() } })) {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(spacing: 12) {
                     WorkspaceSymbol(name: "stethoscope", size: 40)
                     Text("连接诊断").font(.title2.weight(.semibold))
+                    if store.diagnosticsBusy { ProgressView().controlSize(.small) }
                 }
                 Divider()
                 ScrollView {
@@ -95,8 +101,10 @@ struct ContentView: View {
                         .textSelection(.enabled)
                 }
                 HStack {
+                    Button("复制诊断", systemImage: "doc.on.doc") { store.copy(store.diagnostics ?? "") }
+                        .disabled(store.diagnosticsBusy)
                     Spacer()
-                    Button("完成") { store.diagnostics = nil }
+                    Button(store.diagnosticsBusy ? "取消" : "完成") { store.closeDiagnostics() }
                         .keyboardShortcut(.defaultAction)
                 }
             }
@@ -120,7 +128,7 @@ struct ContentView: View {
                             .background(.quaternary.opacity(0.4))
                         Divider()
                     }
-                    DashboardView(url: url, revision: store.dashboardRevision)
+                    DashboardView(session: store.dashboardSession, url: url, revision: store.dashboardRevision)
                 }
             } else {
                 ContentUnavailableView {

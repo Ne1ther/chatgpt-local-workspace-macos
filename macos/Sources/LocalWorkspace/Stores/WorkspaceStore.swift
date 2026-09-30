@@ -24,10 +24,13 @@ final class WorkspaceStore {
     var issue: String?
     var dashboardURL: URL?
     var dashboardRevision = UUID()
+    @ObservationIgnored let dashboardSession = WorkspaceDashboardSession()
+    var coreVersion = WorkspaceCore.version
     var logs: [LogEntry] = []
     var activity: [ActivityEntry] = []
     var conversations: [Conversation] = []
     var diagnostics: String?
+    var diagnosticsBusy = false
     var localCheckPassed = false
     var actualCallObserved = false
     var snapshotStale = false
@@ -38,6 +41,9 @@ final class WorkspaceStore {
     private var errors: Pipe?
     private var monitor: Task<Void, Never>?
     private var startup: Task<Void, Never>?
+    private var diagnosticTask: Task<Void, Never>?
+    private var doctor: TunnelDoctorRunner?
+    private var diagnosticGeneration = UUID()
     private var healthFile: URL?
     private var sessionDirectory: URL?
     private var testDirectory: URL?
@@ -46,11 +52,14 @@ final class WorkspaceStore {
     private var requestID = 0
     private var pending: [Int: CheckedContinuation<[String: Any], Error>] = [:]
     private var timeouts: [Int: Task<Void, Never>] = [:]
+    private var hiddenActivityIDs: Set<String> = []
+    private var latestBackendActivityIDs: Set<String> = []
 
     var running: Bool { process?.isRunning == true }
     var canConnect: Bool { tunnelID.trimmingCharacters(in: .whitespacesAndNewlines).range(of: "^tunnel_[A-Za-z0-9]+$", options: .regularExpression) != nil && apiKey.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10 }
     var supportURL: URL { URL(string: "https://developers.openai.com/api/docs/guides/secure-mcp-tunnels")! }
     var resourceURL: URL { Bundle.main.resourceURL!.appendingPathComponent("Backend") }
+    var tunnelStatusURL: URL? { healthURL()?.appendingPathComponent("ui") }
 
     init() {
         do { apiKey = try KeychainStore.read() }
@@ -68,14 +77,50 @@ final class WorkspaceStore {
         } catch { settingsMessage = error.localizedDescription }
     }
 
-    func log(_ value: String) {
+    private func redacted(_ value: String) -> String {
         var text = value
         if !apiKey.isEmpty { text = text.replacingOccurrences(of: apiKey, with: "[密钥已隐藏]") }
         // Redact keys and signed query strings before they reach native UI or copying.
         text = text.replacingOccurrences(of: "sk-[A-Za-z0-9_-]+", with: "[密钥已隐藏]", options: .regularExpression)
         text = text.replacingOccurrences(of: #"(https?://[^\s?"\\]+)\?[^\s"\\]+"#, with: "$1?[query hidden]", options: .regularExpression)
+        return text
+    }
+
+    func log(_ value: String, recordActivity: Bool = true) {
+        let text = redacted(value)
         logs.append(LogEntry(text: String(text.prefix(16000))))
         if logs.count > 2000 { logs.removeFirst(logs.count - 2000) }
+        if recordActivity {
+            let timestamp = ISO8601DateFormatter()
+            timestamp.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            mergeActivity([ActivityEntry(id: "native-" + UUID().uuidString, threadId: "unassigned", tool: "连接状态",
+                                        target: String(text.prefix(2000)), status: "status", startedAt: timestamp.string(from: Date()), elapsedMs: 0, errorCode: nil)])
+        }
+    }
+
+    private func mergeActivity(_ incoming: [ActivityEntry]) {
+        var merged = Dictionary(activity.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        for row in incoming where !hiddenActivityIDs.contains(row.id) {
+            merged[row.id] = ActivityEntry(id: row.id, threadId: row.threadId, tool: row.tool, target: redacted(row.target),
+                                           status: row.status, startedAt: row.startedAt, elapsedMs: row.elapsedMs,
+                                           errorCode: row.errorCode.map(redacted))
+        }
+        activity = Array(merged.values.sorted {
+            if $0.startedAt == $1.startedAt { return $0.id > $1.id }
+            return $0.startedAt > $1.startedAt
+        }.prefix(WorkspaceCore.activityLimit))
+    }
+
+    func clearActivity() {
+        hiddenActivityIDs.formUnion(latestBackendActivityIDs)
+        activity.removeAll()
+    }
+
+    func reviewActivity(_ entry: ActivityEntry?) {
+        guard let entry, !entry.isConnectionEvent, dashboardURL != nil else { return }
+        destination = .workbench
+        if let url = dashboardURL { _ = dashboardSession.view(for: url, revision: dashboardRevision) }
+        dashboardSession.showActivity(entry)
     }
 
     private func receive(_ data: Data, channel: String, generation expected: UUID) {
@@ -99,12 +144,15 @@ final class WorkspaceStore {
                let value = object["msg"] as? String { message = value + " " + line }
             if let range = message.range(of: #"\[Dashboard\] (http://127\.0\.0\.1:\d+/)"#, options: .regularExpression) {
                 let urlText = String(message[range]).replacingOccurrences(of: "[Dashboard] ", with: "")
-                if let url = URL(string: urlText) { dashboardURL = url }
+                if let url = URL(string: urlText), WorkspaceLocalURL.isSafe(url) { dashboardURL = url }
             }
             if message.contains("[Workspace]") && message.contains(" | RETURNED") && state != .local {
                 actualCallObserved = true
             }
-            log(line)
+            // The backend snapshot supplies tool rows with stable IDs; do not duplicate them from logs.
+            let isToolReceipt = message.contains("[Workspace]") &&
+                !["initialize", "tools/list", "server/discover", "runtime failed"].contains(where: message.contains)
+            log(line, recordActivity: !isToolReceipt && (!line.hasPrefix("{") || message.localizedCaseInsensitiveContains("error") || message.localizedCaseInsensitiveContains("warn")))
         }
         if (buffers[channel]?.count ?? 0) > 512_000 { buffers[channel] = Data(); log("一条超长日志已截断。") }
     }
@@ -151,7 +199,7 @@ final class WorkspaceStore {
         guard canConnect, !busy else { issue = "请先在连接设置中填写 Tunnel ID 和运行密钥。"; return }
         stop()
         saveSettings()
-        state = .starting; busy = true; issue = nil; activity = []; conversations = []
+        state = .starting; busy = true; issue = nil
         let expected = generation
         startup = Task {
             do {
@@ -190,17 +238,21 @@ final class WorkspaceStore {
 
     func runLocalCheck() {
         guard !busy else { return }
-        stop(); state = .local; busy = true; issue = nil; activity = []; conversations = []; localCheckPassed = false
+        stop(); state = .local; busy = true; issue = nil; localCheckPassed = false
         let expected = generation
         startup = Task {
             do {
-                try launch(executable: resourceURL.appendingPathComponent("workspace-server"), arguments: ["--mcp"])
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent("local-workspace-check-" + UUID().uuidString).resolvingSymlinksInPath()
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                testDirectory = directory
+                try launch(executable: resourceURL.appendingPathComponent("workspace-server"), arguments: ["--mcp"],
+                           environment: ["WORKSPACE_STATE_DIR": directory.appendingPathComponent("state").path])
                 _ = try await rpc("initialize", params: ["protocolVersion": "2025-06-18", "capabilities": [:], "clientInfo": ["name": "mac-local-check", "version": "1.0"]])
                 let discovery = try await rpc("tools/list")
-                guard (discovery["tools"] as? [Any])?.count == 26 else { throw WorkspaceError(message: "工具发现数量不符。") }
-                let directory = FileManager.default.temporaryDirectory.appendingPathComponent("local-workspace-check-" + UUID().uuidString).resolvingSymlinksInPath()
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                testDirectory = directory
+                let count = (discovery["tools"] as? [Any])?.count ?? 0
+                guard count == WorkspaceCore.toolCount else {
+                    throw WorkspaceError(message: "工具发现数量不符：收到 \(count) 个，核心 \(WorkspaceCore.version) 应提供 \(WorkspaceCore.toolCount) 个。请重新构建完整应用；连接 ChatGPT 后也需刷新插件工具元数据。")
+                }
                 let thread = try await call("register_conversation", ["title": "本地自检 · 非 ChatGPT 对话", "path": directory.path])
                 let tid = thread["thread_id"] as? String ?? ""
                 let path = directory.appendingPathComponent("检查.txt").path
@@ -211,7 +263,7 @@ final class WorkspaceStore {
                 _ = try await call("get_workspace_status", ["thread_id": tid])
                 guard generation == expected else { return }
                 localCheckPassed = true; busy = false
-                log("本地检查通过：MCP 握手、26 个工具、中文文件读写和 zsh 命令。尚未连接 ChatGPT。")
+                log("本地检查通过：MCP 握手、\(WorkspaceCore.toolCount) 个工具、中文文件读写和 zsh 命令。尚未连接 ChatGPT。")
                 destination = .workbench
             } catch is CancellationError { }
             catch { if generation == expected { fail(error.localizedDescription) } }
@@ -244,10 +296,8 @@ final class WorkspaceStore {
     }
 
     private func healthURL() -> URL? {
-        guard let file = healthFile, let text = try? String(contentsOf: file, encoding: .utf8),
-              let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
-              url.scheme == "http", url.host == "127.0.0.1" else { return nil }
-        return url
+        guard let file = healthFile, let data = try? Data(contentsOf: file), data.count <= 16_384 else { return nil }
+        return WorkspaceLocalURL.healthURL(from: data)
     }
     private func probe(_ url: URL) async -> Bool {
         var request = URLRequest(url: url); request.timeoutInterval = 2
@@ -268,7 +318,13 @@ final class WorkspaceStore {
                         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw WorkspaceError(message: "状态读取失败") }
                         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
                         let snapshot = try decoder.decode(DashboardSnapshot.self, from: data)
-                        activity = snapshot.activity.reversed(); conversations = snapshot.conversations
+                        latestBackendActivityIDs = Set(snapshot.activity.map(\.id))
+                        hiddenActivityIDs.formIntersection(latestBackendActivityIDs)
+                        mergeActivity(snapshot.activity)
+                        var known = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+                        for conversation in snapshot.conversations { known[conversation.id] = conversation }
+                        conversations = known.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+                        if let version = snapshot.version, !version.isEmpty { coreVersion = String(version.prefix(32)) }
                         snapshotStale = false
                     } catch { if generation == expected { snapshotStale = true } }
                 }
@@ -286,22 +342,58 @@ final class WorkspaceStore {
     }
 
     func showDiagnostics() {
-        guard let base = dashboardURL else {
-            diagnostics = "本地程序：\(FileManager.default.isExecutableFile(atPath: resourceURL.appendingPathComponent("workspace-server").path) ? "可用" : "缺失")\n官方 Tunnel：\(FileManager.default.isExecutableFile(atPath: resourceURL.appendingPathComponent("tunnel-client").path) ? "可用" : "缺失")\n连接配置：\(canConnect ? "已填写" : "尚未填写完整")\n实际 ChatGPT 调用：待验证"
-            return
-        }
-        Task {
-            do {
-                var request = URLRequest(url: base.appendingPathComponent("api/diagnostics")); request.timeoutInterval = 15
-                let (data, _) = try await URLSession.shared.data(for: request)
-                let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                let checks = value?["checks"] as? [[String: Any]] ?? []
-                diagnostics = checks.map { "\($0["label"] ?? "")：\($0["status"] ?? "")\n\($0["detail"] ?? "")" }.joined(separator: "\n\n")
-            } catch { diagnostics = "诊断读取失败：\(error.localizedDescription)" }
+        closeDiagnostics()
+        diagnostics = "正在检查连接配置…\n诊断不会停止当前连接。"
+        diagnosticsBusy = true
+        let expected = diagnosticGeneration
+        let base = dashboardURL
+        let runner = TunnelDoctorRunner()
+        doctor = runner
+        let resources = resourceURL, tunnel = tunnelID, key = apiKey
+        diagnosticTask = Task {
+            var report: String?
+            if let base {
+                do {
+                    var request = URLRequest(url: base.appendingPathComponent("api/diagnostics")); request.timeoutInterval = 12
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    guard (response as? HTTPURLResponse)?.statusCode == 200, data.count <= 1_048_576,
+                          let value = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                          let checks = value["checks"] as? [[String: Any]], !checks.isEmpty else {
+                        throw WorkspaceError(message: "诊断暂不可用")
+                    }
+                    report = checks.prefix(100).map {
+                        let status = $0["status"] as? String ?? "unavailable"
+                        let label = status == "pass" ? "通过" : status == "fail" ? "未通过" : status == "pending" ? "待验证" : "未检查"
+                        return "\($0["label"] as? String ?? "检查")：\(label)\n\($0["detail"] as? String ?? "")"
+                    }.joined(separator: "\n\n")
+                } catch is CancellationError { return }
+                catch { /* A failed/stale backend must not block standalone configuration diagnosis. */ }
+            }
+            if report == nil {
+                report = await runner.run(resources: resources, tunnelID: tunnel, apiKey: key)
+                report! += "\n\n本地程序：\(FileManager.default.isExecutableFile(atPath: resources.appendingPathComponent("workspace-server").path) ? "可用" : "缺失")\n实际 ChatGPT 调用：\(actualCallObserved ? "已观察到" : "待验证")"
+            }
+            guard !Task.isCancelled, diagnosticGeneration == expected else { return }
+            diagnostics = redacted(report ?? "未收到诊断结果。") + "\n\n核心 \(coreVersion) · \(WorkspaceCore.toolCount) 个工具\n计划、对话与近期活动在本地加密保存。历史恢复仅覆盖工具直接修改的文件；命令进程、Shell 副作用与图片预览不会跨重启恢复。"
+            diagnosticsBusy = false
+            doctor = nil
+            diagnosticTask = nil
         }
     }
 
+    func closeDiagnostics() {
+        diagnosticGeneration = UUID()
+        diagnosticTask?.cancel()
+        diagnosticTask = nil
+        doctor?.cancel()
+        doctor = nil
+        diagnosticsBusy = false
+        diagnostics = nil
+    }
+
     func stop() {
+        closeDiagnostics()
+        let wasActive = running || busy
         generation = UUID()
         startup?.cancel(); startup = nil
         monitor?.cancel(); monitor = nil
@@ -325,11 +417,15 @@ final class WorkspaceStore {
         if let directory = sessionDirectory { try? FileManager.default.removeItem(at: directory) }
         if let directory = testDirectory { try? FileManager.default.removeItem(at: directory) }
         sessionDirectory = nil; testDirectory = nil; healthFile = nil
+        dashboardSession.reset()
         dashboardURL = nil; buffers = [:]; state = .stopped; busy = false
-        actualCallObserved = false; snapshotStale = false
+        actualCallObserved = false
+        if wasActive { log("连接已停止，保留上次操作记录。计划、对话与近期活动已本地保存；命令进程不跨重启恢复。") }
+        snapshotStale = !activity.isEmpty
     }
-    private func fail(_ message: String) { stop(); issue = message; state = .failed; log(message) }
-    func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
+    private func fail(_ message: String) { stop(); issue = redacted(message); state = .failed; log(message) }
+    func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(redacted(text), forType: .string) }
     func openBrowser() { if let url = dashboardURL { NSWorkspace.shared.open(url) } }
+    func openTunnelStatus() { if let url = tunnelStatusURL { NSWorkspace.shared.open(url) } }
     func refreshDashboard() { dashboardRevision = UUID() }
 }

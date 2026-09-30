@@ -44,6 +44,10 @@ struct ActivityEntry: Decodable, Identifiable {
     let startedAt: String
     let elapsedMs: Int
     let errorCode: String?
+    var isConnectionEvent: Bool { id.hasPrefix("native-") }
+    var copyText: String {
+        "\(startedAt)  \(threadId)  \(tool)  \(target)  \(statusLabel)  \(elapsedMs) ms" + (errorCode.map { "  \($0)" } ?? "")
+    }
     private static let timestamp: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -53,7 +57,7 @@ struct ActivityEntry: Decodable, Identifiable {
         guard let date = Self.timestamp.date(from: startedAt) else { return startedAt }
         return date.formatted(date: .omitted, time: .standard)
     }
-    var statusLabel: String { status == "failed" ? "失败" : status == "running" ? "运行中" : "已返回" }
+    var statusLabel: String { status == "failed" ? "失败" : status == "running" ? "运行中" : status == "status" ? "状态" : "已返回" }
 }
 
 struct Conversation: Decodable, Identifiable {
@@ -63,6 +67,7 @@ struct Conversation: Decodable, Identifiable {
 }
 
 struct DashboardSnapshot: Decodable {
+    let version: String?
     let activity: [ActivityEntry]
     let conversations: [Conversation]
 }

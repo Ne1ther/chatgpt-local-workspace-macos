@@ -35,11 +35,17 @@ static class MacPlatform
         if (File.Exists(launcher)) info.ArgumentList.Add(executable);
         if (shell == "pwsh") {
             info.ArgumentList.Add("-NoLogo"); info.ArgumentList.Add("-NoProfile");
-            info.ArgumentList.Add("-NonInteractive"); info.ArgumentList.Add("-Command");
+            info.ArgumentList.Add("-NonInteractive"); info.ArgumentList.Add("-OutputFormat"); info.ArgumentList.Add("Text");
+            info.ArgumentList.Add("-EncodedCommand");
+            string pre = "$ProgressPreference='SilentlyContinue'; $ErrorActionPreference='Stop'; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); $OutputEncoding=[Console]::OutputEncoding; ";
+            info.ArgumentList.Add(Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(pre + command)));
         } else if (shell == "bash") {
             info.ArgumentList.Add("--noprofile"); info.ArgumentList.Add("--norc"); info.ArgumentList.Add("-c");
-        } else { info.ArgumentList.Add("-f"); info.ArgumentList.Add("-c"); }
-        info.ArgumentList.Add(command);
+            info.ArgumentList.Add(command);
+        } else {
+            info.ArgumentList.Add("-f"); info.ArgumentList.Add("-c");
+            info.ArgumentList.Add(command);
+        }
         return info;
     }
     public static void Stop(Process process) {

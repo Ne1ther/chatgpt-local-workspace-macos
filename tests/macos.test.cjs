@@ -7,12 +7,12 @@ const path = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const Ajv = require('ajv');
 
-test('macOS: all 26 tools, isolation, POSIX process lifecycle and MCP compatibility', { timeout: 90000 }, async t => {
+test('macOS: all 28 tools, isolation, POSIX process lifecycle and MCP compatibility', { timeout: 90000 }, async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-mac-integration-')));
   const exe = process.env.WORKSPACE_TEST_EXE || path.resolve(__dirname, '../dist-macos/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server');
   const child = spawn(exe, ['--mcp'], { stdio: ['pipe', 'pipe', 'pipe'], env: {
     ...process.env, WORKSPACE_TUNNEL_ID: 'tunnel_0123456789abcdef0123456789abcdef',
-    CONTROL_PLANE_API_KEY: 'sk-offline-config-fixture-not-a-real-key', WORKSPACE_TUNNEL_HEALTH_FILE: ''
+    CONTROL_PLANE_API_KEY: 'sk-offline-config-fixture-not-a-real-key', WORKSPACE_TUNNEL_HEALTH_FILE: '', WORKSPACE_STATE_DIR: path.join(root, '.state')
   } });
   let buffer = '', stderr = '', seq = 0, base = '';
   const pending = new Map(), seen = new Set(), schemas = new Map();
@@ -53,12 +53,12 @@ test('macOS: all 26 tools, isolation, POSIX process lifecycle and MCP compatibil
     const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'mac-integration', version: '1' } });
     assert.equal(init.result.protocolVersion, '2025-06-18');
     const list = (await rpc('tools/list')).result.tools;
-    assert.equal(list.length, 26);
+    assert.equal(list.length, 28);
     const ajv = new Ajv({ strict: false });
     for (const item of list) schemas.set(item.name, ajv.compile(item.outputSchema));
     assert(list.find(x => x.name === 'exec_command').inputSchema.properties.shell.enum.includes('zsh'));
     const status = await tool('get_workspace_status');
-    assert.equal(status.default_shell, 'zsh'); assert.equal(status.tool_count, 26);
+    assert.equal(status.default_shell, 'zsh'); assert.equal(status.tool_count, 28);
     assert(status.executable.endsWith('workspace-server')); assert.equal(status.host_session_observed, true);
     const conversation = await tool('register_conversation', { path: root, title: 'macOS 中文检查' });
     assert(conversation.thread_id);
@@ -74,6 +74,11 @@ test('macOS: all 26 tools, isolation, POSIX process lifecycle and MCP compatibil
     assert.equal((await tool('search_files', { path: root, pattern: '*.txt' })).matches.length, 1);
     assert.equal((await tool('search_text', { path: root, query: 'gamma' })).matches.length, 1);
     assert.equal((await tool('show_changes', { path: root })).count, 1);
+    const history = await tool('workspace_history', { path: root });
+    const edited = history.changes.find(change => change.tool === 'edit_file');
+    assert(edited, 'edited file is journaled');
+    await tool('restore_change', { change_id: edited.id });
+    assert.equal(fs.readFileSync(fixture, 'utf8'), 'alpha\n中文 gamma\n', 'restore defaults to preview');
     const plan = [{ step: 'Verify macOS port', status: 'in_progress' }];
     await tool('update_plan', { path: root, plan });
     assert.equal((await tool('check_task_completion', { path: root })).can_finish, false);
@@ -87,6 +92,8 @@ test('macOS: all 26 tools, isolation, POSIX process lifecycle and MCP compatibil
     await patch('*** Update File: patch.txt\n*** Move to: moved.txt');
     assert(!fs.existsSync(path.join(root, 'patch.txt')));
     await patch('*** Delete File: moved.txt');
+    await patch('*** Add File: mac:filename.txt\n+valid POSIX name');
+    assert.equal(fs.readFileSync(path.join(root, 'mac:filename.txt'), 'utf8'), 'valid POSIX name\n');
     const alias = root + '-alias';
     fs.symlinkSync(root, alias);
     try {
@@ -99,6 +106,10 @@ test('macOS: all 26 tools, isolation, POSIX process lifecycle and MCP compatibil
     fs.writeFileSync(script, '#!/bin/sh\necho before\n', { mode: 0o755 });
     await patch('*** Update File: executable.sh\n@@\n-echo before\n+echo after');
     assert.equal(fs.statSync(script).mode & 0o777, 0o755, 'patches preserve macOS executable permissions');
+    const executableEdit = await call('edit_file', { path: script, old_text: 'after', new_text: 'guarded' });
+    assert.equal(fs.statSync(script).mode & 0o777, 0o755, 'guarded edits preserve executable permissions');
+    await tool('restore_change', { change_id: executableEdit.structuredContent.result.change_id, apply: true });
+    assert.equal(fs.statSync(script).mode & 0o777, 0o755, 'file restore preserves executable permissions');
     for (const name of ['../escape.txt', '../' + path.basename(root).toUpperCase() + '/escape.txt']) {
       const bad = await call('apply_patch', { cwd: root, patch: `*** Begin Patch\n*** Add File: ${name}\n+bad\n*** End Patch` }, undefined, true);
       assert(bad.isError);
@@ -114,6 +125,7 @@ test('macOS: all 26 tools, isolation, POSIX process lifecycle and MCP compatibil
     for (const shell of ['zsh', 'bash', 'sh']) {
       const execution = await tool('exec_command', { cwd: root, shell, cmd: "printf '%s' 'quoted \"value\" 中文 $HOME'", yield_time_ms: 3000 });
       assert.equal(execution.output, 'quoted "value" 中文 $HOME'); assert.equal(execution.exit_code, 0);
+      assert(execution.shell_executable.endsWith('/' + shell), 'real shell executable is reported');
     }
     const stdin = await tool('exec_command', { cwd: root, cmd: 'read -r value; printf "received:%s" "$value"', yield_time_ms: 0 });
     await tool('write_stdin', { session_id: stdin.session_id, chars: 'hello 中文\n' });
@@ -167,7 +179,14 @@ test('macOS: all 26 tools, isolation, POSIX process lifecycle and MCP compatibil
     const completed = await rpc('tasks/get', { taskId: task.result.taskId, _meta: meta });
     assert.equal(completed.result.status, 'completed');
     // Mark recovery only after every expected failure has been observed and checked.
-    await tool('update_plan', { path: root, explanation: 'Expected failure cases verified; all integration checks passed.', plan: [{ step: plan[0].step, status: 'completed', evidence: 'All 26 tools exercised against isolated macOS fixtures.' }] });
+    const lastIssue = await tool('check_task_completion', { path: root });
+    const proof = await call('file_info', { path: fixture });
+    await tool('update_plan', { path: root,
+      explanation: 'Expected failure cases verified; all integration checks passed.',
+      resolved_issue_id: lastIssue.last_issue_id,
+      recovery_note: 'All intentional refusal/timeout fixtures were inspected; successful file inspection proves the runtime remains healthy.',
+      recovery_evidence_id: proof.structuredContent.activity_id,
+      plan: [{ step: plan[0].step, status: 'completed', evidence: 'All 28 tools exercised against isolated macOS fixtures.' }] });
     assert.equal((await tool('check_task_completion', { path: root })).can_finish, true);
     assert.equal((await fetch(base)).status, 200);
     assert.equal((await fetch(new URL('/api/snapshot', base), { headers: { Origin: 'https://example.com' } })).status, 403);
@@ -178,6 +197,9 @@ test('macOS: all 26 tools, isolation, POSIX process lifecycle and MCP compatibil
     assert.equal(diagnostics.checks.find(c => c.label === '配置自检').status, 'pass');
     assert.equal(diagnostics.checks.find(c => c.label === '隧道就绪').status, 'unavailable');
     assert.deepEqual([...seen].sort(), list.map(x => x.name).sort());
+    for (const name of fs.readdirSync(path.join(root, '.state')).filter(name => name.endsWith('.bin'))) {
+      assert.equal(fs.statSync(path.join(root, '.state', name)).mode & 0o777, 0o600, 'encrypted state is owner-only');
+    }
     t.diagnostic('PASS: every advertised tool, schema validation, real HTTPS import, legacy/modern negotiation, confirmation, tasks, session isolation, process-tree stop, timeout, same-origin dashboard.');
   } finally {
     for (const entry of pending.values()) clearTimeout(entry.timer);
