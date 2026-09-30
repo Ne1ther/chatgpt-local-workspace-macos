@@ -53,19 +53,10 @@ cp "$TUNNEL_DIR/"*-licenses.txt "$STAGED_APP/Contents/Resources/Licenses/"
 cp "$ROOT_DIR/.tools/dotnet/LICENSE.txt" "$STAGED_APP/Contents/Resources/Licenses/DotNET-MIT.txt"
 cp "$ROOT_DIR/.tools/dotnet/ThirdPartyNotices.txt" "$STAGED_APP/Contents/Resources/Licenses/DotNET-ThirdParty.txt"
 cp macos/Resources/Info.plist "$STAGED_APP/Contents/Info.plist"
-if [[ ! -f "$ROOT_DIR/macos/Resources/AppIcon.icns" ]]; then
-    ICON_TEMP="$BUILD_STAGE/icon"
-    mkdir -p "$ICON_TEMP/AppIcon.iconset"
-    sips -s format png assets/local-workspace.ico --out "$ICON_TEMP/icon.png" >/dev/null
-    for size in 16 32 128 256 512; do
-        sips -z "$size" "$size" "$ICON_TEMP/icon.png" --out "$ICON_TEMP/AppIcon.iconset/icon_${size}x${size}.png" >/dev/null
-        retina=$((size * 2))
-        sips -z "$retina" "$retina" "$ICON_TEMP/icon.png" --out "$ICON_TEMP/AppIcon.iconset/icon_${size}x${size}@2x.png" >/dev/null
-    done
-    iconutil -c icns "$ICON_TEMP/AppIcon.iconset" -o macos/Resources/AppIcon.icns
-    rm -rf "$ICON_TEMP"
+if [[ ! -f macos/Resources/AppIcon.icns || ! -f macos/Resources/AppIcon.png || ! -f macos/Resources/MenuBarIconTemplate.png || ! -f macos/Resources/MenuBarIconTemplate@2x.png || script/generate_icons.swift -nt macos/Resources/AppIcon.icns ]]; then
+    swift script/generate_icons.swift "$ROOT_DIR"
 fi
-cp macos/Resources/AppIcon.icns "$STAGED_APP/Contents/Resources/"
+cp macos/Resources/AppIcon.icns macos/Resources/AppIcon.png macos/Resources/MenuBarIconTemplate*.png "$STAGED_APP/Contents/Resources/"
 for binary in "$STAGED_APP/Contents/Resources/Backend/"*.dylib "$STAGED_APP/Contents/Resources/Backend/workspace-server" "$STAGED_APP/Contents/Resources/Backend/workspace-launcher" "$STAGED_APP/Contents/Resources/Backend/tunnel-client"; do
     codesign --force --sign - "$binary" 2>/dev/null
 done

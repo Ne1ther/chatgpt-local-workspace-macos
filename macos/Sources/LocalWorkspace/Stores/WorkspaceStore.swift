@@ -14,7 +14,8 @@ final class WorkspaceStore {
     var showDockIcon = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
-            NSApp.setActivationPolicy(showDockIcon ? .regular : .accessory)
+            AppPresenceController.applyDockPreference()
+            NotificationCenter.default.post(name: AppPresenceController.dockPreferenceDidChange, object: nil)
         }
     }
     var tunnelID = UserDefaults.standard.string(forKey: "tunnelID") ?? ""

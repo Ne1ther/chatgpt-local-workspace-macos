@@ -11,6 +11,7 @@ struct MainWindowRoot: View {
             .onAppear {
                 delegate.store = store
                 delegate.reopenMainWindow = { openWindow(id: "main") }
+                delegate.presenceController.reconcileAfterSceneChange()
             }
     }
 }
