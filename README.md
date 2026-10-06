@@ -1,23 +1,33 @@
 # ChatGPT Codex Workspace for macOS
 
-这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的社区 macOS 移植 Fork，保留上游工具核心、历史和 MIT 署名。**Mac 应用 1.4.0 · 上游核心 2.3.0 · 28 个 MCP 工具。** 非 OpenAI 官方应用，也不是原作者发布的 macOS 产品。
+这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的社区 macOS 移植 Fork，保留上游工具核心、历史和 MIT 署名。**Mac 应用 1.4.1 · 上游核心 2.3.0 · 28 个 MCP 工具。** 非 OpenAI 官方应用，也不是原作者发布的 macOS 产品。
 
 原生 SwiftUI 界面、内嵌实时工作台、菜单栏和 Dock 独立开关、关窗后台连接；原创暖白石墨图标。同步上游文件历史/撤销重做、命令去重、输出分页、持久计划和 Git 审阅功能。
 
 ## macOS 快速开始
+
+**直接下载安装包，不需要自己编译：**
+
+1. 打开 **[最新 macOS 下载](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/latest)**，在 Assets 中下载 `ChatGPT-Codex-Workspace-1.4.1-arm64.dmg`（Apple Silicon：M1/M2/M3/M4 等）。也提供 ZIP 和 SHA256 校验文件；不要把 GitHub 自动生成的 Source code 当作安装包。
+2. 打开 DMG，将 **ChatGPT Codex Workspace** 拖入 **Applications（应用程序）**，然后从应用程序或 Spotlight 启动。
+3. 在“连接与显示”中填写你自己的 Tunnel ID 和运行密钥，再按 [连接说明](README.macos.md#连接-chatgpt) 配置 ChatGPT 插件。
+
+- 使用安装包**无需 Xcode、Node、Python 或 .NET**。执行 Git 等开发命令仍需要本机已有相应工具。
+- 安装位置：`/Applications/ChatGPT Codex Workspace.app`。Tunnel ID 和已有运行密钥在“连接与显示”中配置，API Key 保存在 macOS 钥匙串。
+- 安装包面向 **Apple Silicon、macOS 14 或更高版本**；尚不提供经过验证的 Intel 安装包。构建为 ad-hoc 签名，尚未 Developer ID 签名/公证；若首次打开被拦截，在确认来源后按 [首次打开说明](README.macos.md#首次打开与-macos-安全提示) 操作。
+- 本地 28 工具、可靠性/重启恢复、协议与浏览器回归已验证；真实 ChatGPT / 6 Pro 对话调用仍取决于宿主和账号支持，不把隧道就绪当作实际调用成功。
+
+完整连接、构建、验证与恢复范围见 **[macOS 使用说明](README.macos.md)**。
+
+### 开发者：从源码构建
+
+只有修改代码或参与开发时才需要编译。需要 Xcode Command Line Tools / Swift 和 Node/npm；脚本管理项目内的 .NET SDK 与官方 Tunnel Client。
 
 ```sh
 git clone https://github.com/Ne1ther/chatgpt-local-workspace-macos.git
 cd chatgpt-local-workspace-macos
 ./script/build_and_run.sh --install
 ```
-
-- 构建需要 Xcode Command Line Tools、Swift 和 Node/npm；脚本管理自己的 .NET SDK 与官方 Tunnel Client。安装后的应用无需 Node、Python 或 .NET。
-- 安装位置：`/Applications/ChatGPT Codex Workspace.app`。Tunnel ID 和已有运行密钥在“连接与显示”中配置，API Key 保存在 macOS 钥匙串。
-- 已在 Apple Silicon 验证。最低部署目标 macOS 14；Intel 和较旧 macOS 未做实机验收。构建为本机 ad-hoc 签名，尚未 Developer ID 签名/公证。
-- 本地 28 工具、可靠性/重启恢复、协议与浏览器回归已验证；真实 ChatGPT / 6 Pro 对话调用仍取决于宿主和账号支持，不把隧道就绪当作实际调用成功。
-
-完整连接、构建、验证与恢复范围见 **[macOS 使用说明](README.macos.md)**。
 
 ---
 

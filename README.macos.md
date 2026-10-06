@@ -2,12 +2,22 @@
 
 这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的独立 macOS 移植，基于上游 **2.3.0 / 6c29708**。保留原作者与贡献者的 MIT 许可和署名；不是 OpenAI 官方应用，也不代表上游作者发布。
 
-## 打开应用
+## 下载安装（无需编译）
 
 - 当前已在 Apple Silicon Mac 上构建、运行和验证。最低部署目标为 macOS 14；较旧系统和 Intel Mac 未做实机验证。
-- 双击 `dist-macos/ChatGPT Codex Workspace.app`，或打开 DMG 后将应用拖入 Applications。
+- 打开 **[最新 macOS 下载](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/latest)**，在 Assets 中下载 `ChatGPT-Codex-Workspace-1.4.1-arm64.dmg`。`arm64` 对应 M 系列 Apple Silicon Mac；本次不提供 Intel 包。`Source code` 是源码，不是安装包。
+- 打开 DMG，将 **ChatGPT Codex Workspace.app** 拖入 **Applications（应用程序）**，再从应用程序或 Spotlight 启动。若选择 ZIP，解压后将 `.app` 拖入应用程序即可。
 - 应用内含原生界面、工作台、本地工具和官方 Tunnel Client。**使用时不需要安装 Node、Python 或 .NET。** 执行 Git 工具需要系统已有 Git；执行其他开发命令仍需要用户安装相应软件。
-- 当前安装包为本机 ad-hoc 签名，尚未进行 Developer ID 签名和 Apple 公证，不作为已公证的公开发行包。
+- 后续更新仍从 Releases 下载新版，先从应用菜单明确退出旧版，再用新版替换应用程序中的 `.app`；关闭窗口不等于退出。已有 Tunnel ID、钥匙串中的运行密钥和显示偏好独立于 `.app`，更新时保留，不需要重新编译。
+- 由于当前采用 ad-hoc 签名，更新后 macOS 可能重新请求钥匙串访问授权。确认请求来自本应用的 `workspace-server` 后按系统提示允许；不要删除原有状态加密项来跳过授权，否则旧操作记录将无法解密。
+
+### 首次打开与 macOS 安全提示
+
+当前社区安装包为 **ad-hoc 签名，尚未进行 Developer ID 签名和 Apple 公证**，不能将它当作已公证应用。macOS 可能在首次打开时提示“无法验证开发者”或“Apple 无法检查”。
+
+确认安装包来自本仓库 Releases 后，先尝试打开应用，再进入 **系统设置 → 隐私与安全性 → 仍要打开**，并确认打开。具体步骤见 [Apple 官方说明](https://support.apple.com/en-us/102445)。不需要关闭系统的 Gatekeeper。
+
+Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 和校验文件放在同一目录，在该目录运行 `shasum -a 256 -c SHA256SUMS.txt`；只下载了一种格式时，另一种会显示文件不存在，核对已下载项为 `OK` 即可。文件校验不替代 Apple 公证。
 
 ## 连接 ChatGPT
 
@@ -84,7 +94,7 @@
 ./script/build_and_run.sh --verify    # 构建、启动并检查进程
 ./script/build_and_run.sh --build-only
 npm test                             # macOS 上运行 Mac 集成与工作台回归
-./script/package_macos.sh             # 生成 DMG、ZIP 和 SHA256SUMS
+./script/package_macos.sh             # 先重新构建，再生成 DMG、ZIP 和 SHA256SUMS
 ```
 
 后续修改代码或获取 GitHub 更新后，在项目目录运行 `./script/build_and_run.sh --install` 即可更新本机应用。脚本先在临时目录完成构建与签名验证，通过后才替换 `/Applications/ChatGPT Codex Workspace.app`；编译失败时，已安装版本仍可用。更新只关闭对应路径中的 ChatGPT Codex Workspace，不按进程名停止其他副本。钥匙串中的运行密钥和应用偏好设置独立于 `.app`，更新时保留。安装器会把同标识的旧 `Local Workspace.app` 迁移为新名称；名称变化不会更改钥匙串或偏好设置。

@@ -34,7 +34,8 @@ fi
 if [[ ! -d node_modules ]]; then npm ci --no-audit --no-fund; fi
 npm run build:ui
 "$DOTNET" publish macos/backend/WorkspaceBackend.csproj -c Release -r "$RID" -o "$BUILD_STAGE/backend" --nologo
-xcrun clang -O2 macos/launcher.c -o "$BUILD_STAGE/backend/workspace-launcher"
+MACOS_MIN_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' macos/Resources/Info.plist)"
+xcrun clang -O2 "-mmacosx-version-min=$MACOS_MIN_VERSION" macos/launcher.c -o "$BUILD_STAGE/backend/workspace-launcher"
 swift build --package-path macos -c release -j 4
 SWIFT_BIN="$(swift build --package-path macos -c release --show-bin-path)/LocalWorkspace"
 mkdir -p "$STAGED_APP/Contents/MacOS" "$STAGED_APP/Contents/Resources/Backend" "$STAGED_APP/Contents/Resources/Licenses"

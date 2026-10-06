@@ -6,14 +6,31 @@ const shell = isMac ? 'zsh' : 'powershell';
 const exe = process.env.WORKSPACE_TEST_EXE || path.join(__dirname, isMac ? '../dist-macos/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server' : '../dist-next/LocalWorkspace.exe');
 const {launchDashboardBrowser} = require('../scripts/browser-launch.cjs');
 
+const testStateService = root => 'community.localworkspace.mac.state-encryption.test.' + path.basename(root);
+function deleteTestStateKey(root) {
+  if (!isMac) return;
+  // Only the per-fixture service is deleted, without reading its value.
+  try { execFileSync('/usr/bin/security', ['delete-generic-password', '-s', testStateService(root), '-a', 'state-v1'], {stdio:'pipe',timeout:5000}); }
+  catch (error) { if (error.status !== 44) throw Error('Could not delete the isolated test Keychain item'); }
+}
+
 function runtime(root) {
-  const child = spawn(exe, ['--mcp'], {windowsHide:true, stdio:['pipe','pipe','pipe'], env:{...process.env, WORKSPACE_STATE_DIR:path.join(root,'.state'), CONTROL_PLANE_API_KEY:'sk-offline-reliability-fixture-not-a-real-key', WORKSPACE_TUNNEL_ID:'tunnel_0123456789abcdef0123456789abcdef', WORKSPACE_TUNNEL_HEALTH_FILE:''}});
+  const child = spawn(exe, ['--mcp'], {windowsHide:true, stdio:['pipe','pipe','pipe'], env:{...process.env, WORKSPACE_STATE_DIR:path.join(root,'.state'), WORKSPACE_TEST_STATE_KEYCHAIN_SERVICE:isMac?testStateService(root):'', CONTROL_PLANE_API_KEY:'sk-offline-reliability-fixture-not-a-real-key', WORKSPACE_TUNNEL_ID:'tunnel_0123456789abcdef0123456789abcdef', WORKSPACE_TUNNEL_HEALTH_FILE:''}});
   let seq=0, buffer='', base='', logs=''; const pending=new Map();
-  const exited=new Promise(resolve=>child.once('exit',resolve));
+  const rejectPending=error=>{for(const p of pending.values()){clearTimeout(p.timer);p.reject(error);}pending.clear();};
+  const exited=new Promise(resolve=>child.once('close',()=>{rejectPending(Error('Test backend closed before responding'));resolve();}));
+  child.on('error',rejectPending);child.stdin.on('error',rejectPending);
   child.stderr.on('data',data=>{logs+=data;const match=logs.match(/\[Dashboard\] (http:\/\/127\.0\.0\.1:\d+\/)/);if(match)base=match[1];});
   child.stdout.on('data',data=>{buffer+=data;let end;while((end=buffer.indexOf('\n'))>=0){const value=JSON.parse(buffer.slice(0,end));buffer=buffer.slice(end+1);const p=pending.get(value.id);if(p){clearTimeout(p.timer);pending.delete(value.id);p.resolve(value);}}});
-  function rpc(method,params={}) { return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,timer:setTimeout(()=>reject(Error('RPC timeout: '+method+' '+logs)),20000)});child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n');}); }
-  return {rpc, base:()=>base, child, async call(name,args={},session='reliability'){const r=await rpc('tools/call',{name,arguments:args,_meta:{'openai/session':session}});assert(!r.error,JSON.stringify(r));return r.result;},async stop(){child.stdin.end();await exited;for(const p of pending.values())clearTimeout(p.timer);}};
+  function rpc(method,params={}) { return new Promise((resolve,reject)=>{const id=++seq,label=method+(params.name?' ('+params.name+')':'');pending.set(id,{resolve,reject,timer:setTimeout(()=>{pending.delete(id);reject(Error('RPC timeout: '+label+' '+logs.slice(-1500)));},20000)});child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n');}); }
+  async function stop() {
+    const term=setTimeout(()=>child.kill('SIGTERM'),3000),kill=setTimeout(()=>child.kill('SIGKILL'),5000);let deadline;
+    try {
+      child.stdin.end();
+      await Promise.race([exited,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('Test backend did not stop within 7 seconds')),7000);})]);
+    } finally {clearTimeout(term);clearTimeout(kill);clearTimeout(deadline);rejectPending(Error('Test backend stopped'));}
+  }
+  return {rpc, base:()=>base, child, async call(name,args={},session='reliability'){const r=await rpc('tools/call',{name,arguments:args,_meta:{'openai/session':session}});assert(!r.error,JSON.stringify(r));return r.result;},stop};
 }
 const data=r=>r.structuredContent.result;
 
@@ -68,7 +85,10 @@ test('guarded edits, undo/redo conflicts, persistent ownership and evidence', {t
     await page.setViewportSize({width:1200,height:780});
     if(process.env.WORKSPACE_CAPTURE_RELIABILITY==='1')await page.screenshot({path:path.join(__dirname,'../docs/images/dashboard-reliability.png')});
     await app.call('edit_file',{path:file,old_text:'first',new_text:'previewed',dry_run:true});await page.getByText('预览，未修改文件',{exact:true}).waitFor();assert((await page.locator('#detail-body').innerText()).includes('previewed'));assert(fs.readFileSync(file,'utf8').startsWith('first'));assert.deepEqual(errors,[]);
-  } finally {if(browser)await browser.close();await app.stop();fs.rmSync(root,{recursive:true,force:true});}
+  } finally {
+    try {if(browser)await browser.close();}
+    finally {try {await app.stop();} finally {try {deleteTestStateKey(root);} finally {fs.rmSync(root,{recursive:true,force:true});}}}
+  }
 });
 
 test('command retries, output cursors, lost runtime reconciliation and private review baselines', {timeout:90000}, async()=>{
@@ -95,7 +115,7 @@ test('command retries, output cursors, lost runtime reconciliation and private r
     assert((await app.call('exec_command',args)).isError);assert.equal(fs.readFileSync(path.join(root,'count.txt'),'utf8').trim(),'once');
     const lost=data(await app.call('check_task_completion',{path:root},'interrupted'));assert.equal(lost.can_finish,false);assert.match(lost.last_issue,/PROCESS_RESTARTED/);
     assert.equal(data(await app.call('show_changes',{path:repo,since:'workspace_open'})).count,2);
-  } finally {await app.stop();fs.rmSync(root,{recursive:true,force:true});}
+  } finally {try {await app.stop();} finally {try {deleteTestStateKey(root);} finally {fs.rmSync(root,{recursive:true,force:true});}}}
 });
 
 test('Windows credential store round trip uses an isolated synthetic target',{skip:isMac},()=>{

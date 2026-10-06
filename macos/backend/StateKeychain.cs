@@ -10,13 +10,35 @@ static class StateKeychain
 {
     const string Security = "/System/Library/Frameworks/Security.framework/Security";
     const string CoreFoundation = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
-    const string Service = "community.localworkspace.mac.state-encryption";
+    const string ProductionService = "community.localworkspace.mac.state-encryption";
+    const string TestServicePrefix = ProductionService + ".test.";
+    static readonly string Service = ResolveService();
     const string Account = "state-v1";
     const int NotFound = -25300, Duplicate = -25299;
     const int KeyLength = 32, NonceLength = 12, TagLength = 16;
     static readonly byte[] Magic = Encoding.ASCII.GetBytes("LWSMAC01");
     static readonly IntPtr SecurityHandle = NativeLibrary.Load(Security);
     static readonly IntPtr FoundationHandle = NativeLibrary.Load(CoreFoundation);
+
+    // Integration tests must not request access to a user's existing state key.
+    // The explicit override is restricted to disposable test items and requires
+    // an explicitly selected state directory; normal app runs retain the service.
+    static string ResolveService()
+    {
+        string configured = Environment.GetEnvironmentVariable("WORKSPACE_TEST_STATE_KEYCHAIN_SERVICE");
+        if (string.IsNullOrEmpty(configured)) return ProductionService;
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WORKSPACE_STATE_DIR")) ||
+            !configured.StartsWith(TestServicePrefix, StringComparison.Ordinal))
+            throw new ArgumentException("Test Keychain service requires WORKSPACE_STATE_DIR and the dedicated test prefix.");
+        string suffix = configured.Substring(TestServicePrefix.Length);
+        if (suffix.Length == 0 || suffix.Length > 128)
+            throw new ArgumentException("Test Keychain service suffix must contain 1..128 safe characters.");
+        foreach (char c in suffix)
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') || c == '-' || c == '_'))
+                throw new ArgumentException("Test Keychain service suffix contains unsafe characters.");
+        return configured;
+    }
 
     [DllImport(CoreFoundation)] static extern IntPtr CFDictionaryCreateMutable(IntPtr allocator, nint capacity, IntPtr keyCallbacks, IntPtr valueCallbacks);
     [DllImport(CoreFoundation)] static extern void CFDictionarySetValue(IntPtr dictionary, IntPtr key, IntPtr value);

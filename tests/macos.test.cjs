@@ -9,14 +9,26 @@ const Ajv = require('ajv');
 
 test('macOS: all 28 tools, isolation, POSIX process lifecycle and MCP compatibility', { timeout: 90000 }, async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-mac-integration-')));
+  const stateService = 'community.localworkspace.mac.state-encryption.test.' + path.basename(root);
   const exe = process.env.WORKSPACE_TEST_EXE || path.resolve(__dirname, '../dist-macos/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server');
   const child = spawn(exe, ['--mcp'], { stdio: ['pipe', 'pipe', 'pipe'], env: {
     ...process.env, WORKSPACE_TUNNEL_ID: 'tunnel_0123456789abcdef0123456789abcdef',
-    CONTROL_PLANE_API_KEY: 'sk-offline-config-fixture-not-a-real-key', WORKSPACE_TUNNEL_HEALTH_FILE: '', WORKSPACE_STATE_DIR: path.join(root, '.state')
+    CONTROL_PLANE_API_KEY: 'sk-offline-config-fixture-not-a-real-key', WORKSPACE_TUNNEL_HEALTH_FILE: '', WORKSPACE_STATE_DIR: path.join(root, '.state'),
+    WORKSPACE_TEST_STATE_KEYCHAIN_SERVICE: stateService
   } });
   let buffer = '', stderr = '', seq = 0, base = '';
   const pending = new Map(), seen = new Set(), schemas = new Map();
-  const exited = new Promise(resolve => child.once('exit', resolve));
+  let publicHttpsVerified = false;
+  const rejectPending = error => {
+    for (const waiter of pending.values()) { clearTimeout(waiter.timer); waiter.reject(error); }
+    pending.clear();
+  };
+  const exited = new Promise(resolve => child.once('close', () => {
+    rejectPending(Error('Test backend closed before responding'));
+    resolve();
+  }));
+  child.on('error', rejectPending);
+  child.stdin.on('error', rejectPending);
   child.stderr.on('data', data => {
     stderr += data;
     const found = stderr.match(/\[Dashboard\] (http:\/\/127\.0\.0\.1:\d+\/)/);
@@ -34,7 +46,11 @@ test('macOS: all 28 tools, isolation, POSIX process lifecycle and MCP compatibil
   });
   const rpc = (method, params = {}) => new Promise((resolve, reject) => {
     const id = ++seq;
-    pending.set(id, { resolve, timer: setTimeout(() => reject(Error(`Timeout: ${method}\n${stderr.slice(-1500)}`)), 20000) });
+    const label = method + (params.name ? ` (${params.name})` : '');
+    pending.set(id, { resolve, reject, timer: setTimeout(() => {
+      pending.delete(id);
+      reject(Error(`Timeout: ${label}\n${stderr.slice(-1500)}`));
+    }, 20000) });
     child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
   });
   const call = async (name, args = {}, session = 'mac-test-A', allowError = false) => {
@@ -155,8 +171,16 @@ test('macOS: all 28 tools, isolation, POSIX process lifecycle and MCP compatibil
     assert((await tool('git_status', { path: root })).output.includes('tracked.txt'));
     assert((await tool('git_diff', { path: root })).output.includes('+after'));
     const imported = path.join(root, 'license-import.txt');
-    await tool('import_file', { path: imported, file: { file_id: 'public-license-fixture', download_url: 'https://raw.githubusercontent.com/CSL19980820/chatgpt-local-workspace/main/LICENSE' } });
-    assert(fs.readFileSync(imported, 'utf8').includes('MIT License'));
+    const importedResult = await call('import_file', { path: imported, file: { file_id: 'public-license-fixture', download_url: 'https://raw.githubusercontent.com/CSL19980820/chatgpt-local-workspace/main/LICENSE' } }, undefined, true);
+    if (importedResult.isError && importedResult.structuredContent.result.message === 'Private and loopback download addresses are not allowed.') {
+      assert(!fs.existsSync(imported), 'blocked download must not leave a destination');
+      await t.test('real public HTTPS attachment download', { skip: 'Public fixture resolves to private/fake-IP addresses on this network; keep the download guard enabled.' }, () => {});
+      fs.writeFileSync(imported, 'existing destination fixture\n');
+    } else {
+      assert(!importedResult.isError, JSON.stringify(importedResult));
+      await t.test('real public HTTPS attachment download', () => assert(fs.readFileSync(imported, 'utf8').includes('MIT License')));
+      publicHttpsVerified = true;
+    }
     assert((await call('import_file', { path: imported, file: { file_id: 'fixture', download_url: 'https://example.com/file' } }, undefined, true)).isError);
     const b = await tool('register_conversation', { path: root, title: 'Second conversation' }, 'mac-test-B');
     assert.notEqual(b.thread_id, conversation.thread_id);
@@ -200,12 +224,24 @@ test('macOS: all 28 tools, isolation, POSIX process lifecycle and MCP compatibil
     for (const name of fs.readdirSync(path.join(root, '.state')).filter(name => name.endsWith('.bin'))) {
       assert.equal(fs.statSync(path.join(root, '.state', name)).mode & 0o777, 0o600, 'encrypted state is owner-only');
     }
-    t.diagnostic('PASS: every advertised tool, schema validation, real HTTPS import, legacy/modern negotiation, confirmation, tasks, session isolation, process-tree stop, timeout, same-origin dashboard.');
+    t.diagnostic('PASS: every advertised tool invoked, schema validation, legacy/modern negotiation, confirmation, tasks, session isolation, process-tree stop, timeout, same-origin dashboard. Public HTTPS import: ' + (publicHttpsVerified ? 'verified' : 'not verified on this fake/private-DNS network'));
   } finally {
-    for (const entry of pending.values()) clearTimeout(entry.timer);
-    child.stdin.end();
-    const watchdog = setTimeout(() => child.kill('SIGTERM'), 3000);
-    await exited; clearTimeout(watchdog);
-    fs.rmSync(root, { recursive: true, force: true });
+    const term = setTimeout(() => child.kill('SIGTERM'), 3000);
+    const kill = setTimeout(() => child.kill('SIGKILL'), 5000);
+    let deadline;
+    try {
+      child.stdin.end();
+      await Promise.race([exited, new Promise((_, reject) => {
+        deadline = setTimeout(() => reject(Error('Test backend did not stop within 7 seconds')), 7000);
+      })]);
+    } finally {
+      clearTimeout(term); clearTimeout(kill); clearTimeout(deadline);
+      rejectPending(Error('Test backend stopped'));
+      try {
+        // Delete only this disposable item; never read or alter the user's key.
+        try { execFileSync('/usr/bin/security', ['delete-generic-password', '-s', stateService, '-a', 'state-v1'], { stdio: 'pipe', timeout: 5000 }); }
+        catch (error) { if (error.status !== 44) throw Error('Could not delete the isolated test Keychain item'); }
+      } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    }
   }
 });
