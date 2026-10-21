@@ -16,6 +16,27 @@ static class WorkspaceDiagnostics
     public static void Discover(){lock(Gate)discovered=DateTime.UtcNow.ToString("o");}
     public static void Completed(string tool,bool failed){lock(Gate){lastTool=tool;if(failed)lastFailure=DateTime.UtcNow.ToString("o");else lastSuccess=DateTime.UtcNow.ToString("o");}}
     static object Check(string label,string status,string detail){return new{label=label,status=status,detail=detail};}
+    static object Component(string id,string label,string running,string installed)
+    {
+        bool restart=!string.IsNullOrEmpty(running)&&!string.IsNullOrEmpty(installed)&&running!=installed;
+        return new{id=id,label=label,running=string.IsNullOrEmpty(running)?null:running,installed=string.IsNullOrEmpty(installed)?null:installed,restart_required=restart,status=string.IsNullOrEmpty(installed)?"missing":restart?"restart_required":string.IsNullOrEmpty(running)?"unknown_running":"ok",detail="运行版本在启动时记录；磁盘版本来自当前应用组件清单。"};
+    }
+    static string manifestKey;static Dictionary<string,object> manifest;
+    static object[] Versions()
+    {
+        string path=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"runtime-components.json");
+        Dictionary<string,object> disk;
+        lock(Gate){
+            var info=new FileInfo(path);string key=info.Exists?info.Length+"|"+info.LastWriteTimeUtc.Ticks:"missing";
+            if(key!=manifestKey||manifest==null){
+                try{manifest=info.Exists&&info.Length<16384?new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(path)):new Dictionary<string,object>();}catch{manifest=new Dictionary<string,object>();}
+                manifestKey=key;
+            }
+            disk=manifest;
+        }
+        Func<string,string> value=name=>{object v;return disk.TryGetValue(name,out v)?Convert.ToString(v):null;};
+        return new[]{Component("mcp","本地 MCP",WorkspaceServer.Version,value("core")),Component("desktop","macOS 应用",Environment.GetEnvironmentVariable("WORKSPACE_DESKTOP_VERSION"),value("desktop")),Component("tunnel","Tunnel Client",Environment.GetEnvironmentVariable("WORKSPACE_TUNNEL_VERSION"),value("tunnel"))};
+    }
     static bool Probe(string url){try{var req=(HttpWebRequest)WebRequest.Create(url);req.Proxy=null;req.AllowAutoRedirect=false;req.Timeout=1500;using(var response=(HttpWebResponse)req.GetResponse())return response.StatusCode==HttpStatusCode.OK;}catch{return false;}}
     public static object[] Doctor(string tunnel,string key)
     {
@@ -65,8 +86,8 @@ static class WorkspaceDiagnostics
             checks.Add(Check("MCP 握手",initialized==null?"pending":"pass",initialized??"尚未收到 initialize 或 server/discover。"));
             checks.Add(Check("工具发现",discovered==null?"pending":"pass",discovered==null?"尚未收到 tools/list，请在宿主刷新工具。":WorkspaceServer.ToolCount+" 个工具 · "+discovered));
             checks.Add(Check("实际工具调用",lastSuccess==null?"pending":"pass",lastSuccess==null?"尚无成功调用，请从宿主调用 get_workspace_status。":"最近成功："+lastSuccess));
-            checks.Add(Check("自动对话归属",HostSessionObserved?"pass":"pending",HostSessionObserved?"已收到官方匿名会话标识。":"尚未收到 openai/session；继续支持手动登记。"));
-            return new{version=WorkspaceServer.Version,checked_at=DateTime.UtcNow.ToString("o"),checks=checks,last_tool=lastTool,last_failure=lastFailure,scope="仅当前进程实际观察到的请求；本地测试请求也会计入，不代表所有 ChatGPT 能力均已验收。"};
+            checks.Add(Check("自动对话归属",HostSessionObserved?"pass":"pending",HostSessionObserved?"已收到 ChatGPT 或 Codex 的宿主会话标识。":"尚未收到 openai/session 或 Codex threadId；继续支持手动登记。"));
+            return new{version=WorkspaceServer.Version,versions=Versions(),checked_at=DateTime.UtcNow.ToString("o"),checks=checks,last_tool=lastTool,last_failure=lastFailure,scope="仅当前进程实际观察到的请求；本地测试请求也会计入，不代表所有 ChatGPT 能力均已验收。"};
         }
     }
 }

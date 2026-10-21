@@ -19,6 +19,49 @@ static class StateKeychain
     static readonly byte[] Magic = Encoding.ASCII.GetBytes("LWSMAC01");
     static readonly IntPtr SecurityHandle = NativeLibrary.Load(Security);
     static readonly IntPtr FoundationHandle = NativeLibrary.Load(CoreFoundation);
+    static readonly object RuntimeGate = new object();
+    static byte[] runtimeKey;
+    static Exception runtimeKeyError;
+
+    static StateKeychain()
+    {
+        AppDomain.CurrentDomain.ProcessExit += (_, __) => {
+            lock (RuntimeGate) {
+                if (runtimeKey != null) { CryptographicOperations.ZeroMemory(runtimeKey); runtimeKey = null; }
+            }
+        };
+    }
+
+    static byte[] RuntimeKey(bool mayCreate)
+    {
+        lock (RuntimeGate) {
+            if (runtimeKeyError != null)
+                throw new IOException("Workspace-state key access failed earlier in this runtime. Reconnect to retry; original state was preserved.", runtimeKeyError);
+            if (runtimeKey == null) {
+                if (Environment.GetEnvironmentVariable("WORKSPACE_EPHEMERAL_STATE") == "1") {
+                    string configured = Environment.GetEnvironmentVariable("WORKSPACE_STATE_DIR");
+                    if (string.IsNullOrWhiteSpace(configured)) throw new ArgumentException("Ephemeral state requires an isolated self-check directory.");
+                    string path = Path.GetFullPath(configured);
+                    var parent = Directory.GetParent(path);
+                    if (Path.GetFileName(path) != "state" || parent == null || !parent.Name.StartsWith("local-workspace-check-", StringComparison.Ordinal))
+                        throw new ArgumentException("Ephemeral state is restricted to a disposable local-workspace-check directory.");
+                    if (!mayCreate) throw new CryptographicException("Ephemeral state cannot reopen saved state; original files were preserved.");
+                    runtimeKey = RandomNumberGenerator.GetBytes(KeyLength);
+                } else {
+                    // One authorized Keychain read per runtime, rather than one
+                    // request for every activity begin/finish and state write.
+                    try { runtimeKey = GetOrCreateKey(Service, mayCreate); }
+                    catch (Exception error) when (error is IOException || error is CryptographicException) {
+                        // Denying an access request must not trigger another
+                        // prompt for every subsequent activity/state update.
+                        runtimeKeyError = error;
+                        throw;
+                    }
+                }
+            }
+            return (byte[])runtimeKey.Clone();
+        }
+    }
 
     // Integration tests must not request access to a user's existing state key.
     // The explicit override is restricted to disposable test items and requires
@@ -113,14 +156,14 @@ static class StateKeychain
     }
     public static byte[] Protect(byte[] plain, byte[] context, bool mayCreateKey)
     {
-        byte[] key = GetOrCreateKey(Service, mayCreateKey);
+        byte[] key = RuntimeKey(mayCreateKey);
         try { return Encrypt(plain, context, key); }
         finally { CryptographicOperations.ZeroMemory(key); }
     }
     public static byte[] Unprotect(byte[] encrypted, byte[] context)
     {
         // Never recreate a missing key when saved state already exists.
-        byte[] key = GetOrCreateKey(Service, false);
+        byte[] key = RuntimeKey(false);
         try { return Decrypt(encrypted, context, key); }
         finally { CryptographicOperations.ZeroMemory(key); }
     }

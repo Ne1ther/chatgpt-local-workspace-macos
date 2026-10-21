@@ -14,15 +14,16 @@ using System.Runtime.InteropServices;
 // Loopback view plus an explicit, same-origin Windows reveal action. Never execute files.
 sealed class LocalDashboard : IDisposable
 {
-    readonly TcpListener listener; readonly Func<string,object> snapshot; readonly SemaphoreSlim slots=new SemaphoreSlim(8); bool stopped;
+    readonly TcpListener listener; readonly Func<string,object> snapshot;readonly Func<object> clearLogs; readonly SemaphoreSlim slots=new SemaphoreSlim(8); bool stopped;
     [ThreadStatic] static JavaScriptSerializer jsonInstance;
     // Reused per pool thread; the snapshot endpoint is polled ~1/sec per open dashboard.
     static JavaScriptSerializer Json { get { var j=jsonInstance; if(j==null){ j=new JavaScriptSerializer{MaxJsonLength=8*1024*1024}; jsonInstance=j; } return j; } }
     public static string Url="";
     readonly string actionToken=Guid.NewGuid().ToString("N");
-    public LocalDashboard(Func<string,object> getSnapshot)
+    readonly Func<object> nativeSnapshot;
+    public LocalDashboard(Func<string,object> getSnapshot,Func<object> getNativeSnapshot=null,Func<object> clearCompletedLogs=null)
     {
-        snapshot=getSnapshot;listener=new TcpListener(IPAddress.Loopback,0);listener.Start();Url="http://127.0.0.1:"+((IPEndPoint)listener.LocalEndpoint).Port+"/";
+        snapshot=getSnapshot;nativeSnapshot=getNativeSnapshot;clearLogs=clearCompletedLogs;listener=new TcpListener(IPAddress.Loopback,0);listener.Start();Url="http://127.0.0.1:"+((IPEndPoint)listener.LocalEndpoint).Port+"/";
         Task.Run(async()=>{while(!stopped){TcpClient client;try{client=await listener.AcceptTcpClientAsync();}catch{break;}if(!slots.Wait(0)){client.Close();continue;}ThreadPool.QueueUserWorkItem(_=>{try{Serve(client);}finally{client.Close();slots.Release();}});}});
         Console.Error.WriteLine("[Dashboard] "+Url);
     }
@@ -36,11 +37,17 @@ sealed class LocalDashboard : IDisposable
             if(!headers.TryGetValue("Host",out host)||host!=baseUri.Authority||(headers.TryGetValue("Origin",out origin)&&origin!=Url.TrimEnd('/'))||(headers.TryGetValue("Sec-Fetch-Site",out site)&&site!="same-origin"&&site!="none")){Send(stream,403,"text/plain","Local same-origin access only");return;}
             if(first.Length!=3){Send(stream,400,"text/plain","Invalid request");return;}
             Uri uri;if(!Uri.TryCreate(baseUri,first[1],out uri)||uri.Authority!=baseUri.Authority){Send(stream,400,"text/plain","Invalid target");return;}
-            if(uri.AbsolutePath=="/api/open")
+            if(uri.AbsolutePath=="/api/open"||uri.AbsolutePath=="/api/clear-logs"||uri.AbsolutePath=="/api/check-access")
             {
                 string token;
                 if(first[0]!="POST"){Send(stream,405,"text/plain","POST only");return;}
-                if(!headers.TryGetValue("Origin",out origin)||origin!=Url.TrimEnd('/')||!headers.TryGetValue("X-Workspace-Token",out token)||token!=actionToken){Send(stream,403,"application/json",Json.Serialize(new{error="请从本地工作台点击路径。"}));return;}
+                if(!headers.TryGetValue("Origin",out origin)||origin!=Url.TrimEnd('/')||!headers.TryGetValue("X-Workspace-Token",out token)||token!=actionToken){Send(stream,403,"application/json",Json.Serialize(new{error=uri.AbsolutePath=="/api/clear-logs"?"请从本地工作台操作。":"请从本地工作台点击路径。"}));return;}
+                if(uri.AbsolutePath=="/api/check-access") {
+                    string write=Query(uri,"write");
+                    if(write!=""&&write!="0"&&write!="1"){Send(stream,400,"application/json","{\"error\":\"Invalid write check flag\"}");return;}
+                    Send(stream,200,"application/json",Json.Serialize(WorkspaceAccess.Check(Query(uri,"path"),write=="1")));return;
+                }
+                if(uri.AbsolutePath=="/api/clear-logs"){if(clearLogs==null)Send(stream,503,"application/json","{\"error\":\"当前进程无法清空日志。\"}");else Send(stream,200,"application/json",Json.Serialize(clearLogs()));return;}
                 try{Reveal(Query(uri,"target"));Send(stream,200,"application/json","{\"opened\":true}");}
                 catch(Exception ex){if(!(ex is ArgumentException||ex is IOException||ex is System.ComponentModel.Win32Exception||ex is UnauthorizedAccessException||ex is COMException||ex is NotSupportedException))throw;Send(stream,400,"application/json",Json.Serialize(new{error=ex.Message}));}
                 return;
@@ -54,6 +61,7 @@ sealed class LocalDashboard : IDisposable
             }
             else if(uri.AbsolutePath=="/api/local-actions")Send(stream,200,"application/json",Json.Serialize(new{token=actionToken}));
             else if(uri.AbsolutePath=="/api/diagnostics")Send(stream,200,"application/json",Json.Serialize(WorkspaceDiagnostics.Read()));
+            else if(uri.AbsolutePath=="/api/native-status"&&nativeSnapshot!=null)Send(stream,200,"application/json",Json.Serialize(nativeSnapshot()));
             else if(uri.AbsolutePath.StartsWith("/api/images/",StringComparison.Ordinal)){
                 var image=DashboardImages.Get(uri.AbsolutePath.Substring("/api/images/".Length));
                 if(image==null)Send(stream,404,"text/plain","图片预览已过期，请重新读取图片。");

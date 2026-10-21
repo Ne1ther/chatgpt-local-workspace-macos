@@ -8,7 +8,12 @@ static class MacPlatform
     public static string NormalizePath(string path) {
         string current = Path.GetFullPath(path);
         var suffix = new System.Collections.Generic.Stack<string>();
-        while(!Directory.Exists(current) && !File.Exists(current)) {
+        while(true) {
+            try { File.GetAttributes(current); break; }
+            catch(FileNotFoundException) { }
+            catch(DirectoryNotFoundException) { }
+            // File/Directory.Exists suppress access-denied errors. Preserve them
+            // instead of pretending a protected folder does not exist.
             suffix.Push(Path.GetFileName(current));
             current = Path.GetDirectoryName(current);
             if (string.IsNullOrEmpty(current)) throw new IOException("Cannot resolve path: " + path);
@@ -18,11 +23,16 @@ static class MacPlatform
         return current;
     }
     [DllImport("libc")] static extern int kill(int pid, int signal);
-    [DllImport("libc")] static extern IntPtr realpath(string path, IntPtr buffer);
+    [DllImport("libc", SetLastError=true)] static extern IntPtr realpath(string path, IntPtr buffer);
     [DllImport("libc")] static extern void free(IntPtr pointer);
     public static string RealPath(string path) {
         var pointer = realpath(path, IntPtr.Zero);
-        if (pointer == IntPtr.Zero) throw new IOException("Cannot resolve workspace: " + path);
+        if (pointer == IntPtr.Zero) {
+            int error=Marshal.GetLastWin32Error();
+            if(error==1||error==13)throw new UnauthorizedAccessException("无法访问该路径："+path);
+            if(error==2||error==20)throw new FileNotFoundException("路径不存在："+path,path);
+            throw new IOException("Cannot resolve workspace: " + path+" (errno "+error+")");
+        }
         try { return Marshal.PtrToStringUTF8(pointer); } finally { free(pointer); }
     }
     public static ProcessStartInfo Shell(string shell, string executable, string command, string cwd) {

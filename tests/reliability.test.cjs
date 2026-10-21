@@ -75,14 +75,16 @@ test('guarded edits, undo/redo conflicts, persistent ownership and evidence', {t
     assert(!(await app.call('restore_change',{change_id:changeId,apply:true})).isError);assert(fs.readFileSync(file,'utf8').startsWith('first'));
     const scoped=data(await app.call('read_workspace_activity',{path:root}));assert(scoped.activity.some(a=>a.tool==='restore_change'),'restores belong to the workspace timeline');
     // Actual rendered evidence/history details against the rebuilt EXE.
-    browser=(await launchDashboardBrowser()).browser;const page=await browser.newPage({viewport:{width:1000,height:740}});const errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.goto(app.base());
+    browser=(await launchDashboardBrowser()).browser;const page=await browser.newPage({viewport:{width:1600,height:900}});const errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.goto(app.base());
     const snapshot=await(await fetch(app.base()+'api/snapshot')).json();assert(snapshot.activity.some(a=>a.detail?.change_id===changeId));
-    await page.getByText('文件恢复记录',{exact:true}).first().waitFor({timeout:10000});
-    await page.getByText('执行证据',{exact:true}).first().click();assert((await page.locator('#detail-body').innerText()).includes('活动 ID'));
-    await page.setViewportSize({width:640,height:720});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert((await page.locator('#detail-title').boundingBox()).height<30,'title must stay on one line');
-    await page.getByText('文件恢复记录',{exact:true}).first().click();
+    await page.locator('#detail-body .evidence summary').click();
+    assert((await page.locator('#detail-body').innerText()).includes('活动 ID'));
+    assert((await page.locator('#detail-body').innerText()).includes('文件恢复记录 ID'));
+    await page.setViewportSize({width:640,height:720});await page.click('#inspector-toggle');
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert((await page.locator('#detail-title').boundingBox()).height<30,'title must stay on one line');
     if(process.env.WORKSPACE_CAPTURE_RELIABILITY==='1')await page.screenshot({path:path.join(__dirname,'../work/reliability-narrow.png')});
     await page.setViewportSize({width:1200,height:780});
+    await page.click('#inspector-toggle');
     if(process.env.WORKSPACE_CAPTURE_RELIABILITY==='1')await page.screenshot({path:path.join(__dirname,'../docs/images/dashboard-reliability.png')});
     await app.call('edit_file',{path:file,old_text:'first',new_text:'previewed',dry_run:true});await page.getByText('预览，未修改文件',{exact:true}).waitFor();assert((await page.locator('#detail-body').innerText()).includes('previewed'));assert(fs.readFileSync(file,'utf8').startsWith('first'));assert.deepEqual(errors,[]);
   } finally {
@@ -116,6 +118,81 @@ test('command retries, output cursors, lost runtime reconciliation and private r
     const lost=data(await app.call('check_task_completion',{path:root},'interrupted'));assert.equal(lost.can_finish,false);assert.match(lost.last_issue,/PROCESS_RESTARTED/);
     assert.equal(data(await app.call('show_changes',{path:repo,since:'workspace_open'})).count,2);
   } finally {try {await app.stop();} finally {try {deleteTestStateKey(root);} finally {fs.rmSync(root,{recursive:true,force:true});}}}
+});
+
+test('2.4.1: Codex identity, waiting cursors, unblocked observation and durable evidence after clearing', {timeout:45000}, async()=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-241-'));let app=runtime(root);
+  const meta={threadId:'codex-fixture', 'x-codex-turn-metadata':JSON.stringify({thread_id:'codex-fixture',turn_id:'turn-fixture'}),traceparent:'00-1234567890abcdef1234567890abcdef-1234567890abcdef-01'};
+  const call=async(name,args={})=>{const r=await app.rpc('tools/call',{name,arguments:args,_meta:meta});assert(!r.error);assert(!r.result.isError,JSON.stringify(r));return r.result;};
+  try {
+    await app.rpc('initialize');
+    const opened=await call('open_workspace',{path:root}),thread=opened.structuredContent.thread_id;
+    const proof=await call('write_file',{path:path.join(root,'proof.txt'),content:'verified\n'});
+    await call('update_plan',{path:root,plan:[{step:'Verified write',status:'completed',activity_ids:[proof.structuredContent.activity_id]}]});
+    const status=data(await call('get_workspace_status'));
+    assert.equal(status.conversations.find(c=>c.thread_id===thread).source,'codex');
+    const snapshot=await(await fetch(app.base()+'api/snapshot')).json();
+    const row=snapshot.activity.find(a=>a.id===proof.structuredContent.activity_id);
+    assert.equal(row.turn_id,'turn-fixture');assert.equal(row.trace_id,'1234567890abcdef1234567890abcdef');
+    const asyncCommand=data(await call('exec_command',{cwd:root,shell,cmd:isMac?"printf A; sleep 0.5; printf B; sleep 0.5; printf C":"[Console]::Write('A');Start-Sleep -Milliseconds 500;[Console]::Write('B');Start-Sleep -Milliseconds 500;[Console]::Write('C')",yield_time_ms:100}));
+    assert(!('full_output' in asyncCommand));
+    const page=data(await call('read_command',{session_id:asyncCommand.session_id,offset:1,length:10,yield_time_ms:1500}));
+    assert(page.output.startsWith('B'));assert(page.next_offset>=2);assert(!('full_output' in page));
+    const final=data(await call('read_command',{session_id:asyncCommand.session_id,yield_time_ms:3000,include_full_output:true}));
+    assert.equal(final.full_output,'ABC');assert.equal(final.running,false);
+    const long=call('exec_command',{cwd:root,shell,cmd:isMac?'sleep 1.5':'Start-Sleep -Milliseconds 1500',yield_time_ms:3000});
+    await new Promise(resolve=>setTimeout(resolve,150));
+    const observe=await Promise.race([call('get_workspace_status',{path:root}),new Promise((_,reject)=>setTimeout(()=>reject(Error('Observation blocked behind the worker')),900))]);
+    assert(data(observe).workspace.commands.some(c=>c.running));await long;
+    const token=(await(await fetch(app.base()+'api/local-actions')).json()).token;
+    const cleared=await fetch(app.base()+'api/clear-logs',{method:'POST',headers:{Origin:app.base().replace(/\/$/,''),'X-Workspace-Token':token}});
+    assert.equal(cleared.status,200);
+    await app.stop();app=runtime(root);await app.rpc('initialize');
+    const reopened=await call('check_task_completion',{path:root});
+    assert.equal(reopened.structuredContent.thread_id,thread);assert.equal(data(reopened).can_finish,true,'clearing the timeline preserves encrypted validation evidence');
+  } finally {try{await app.stop();}finally{try{deleteTestStateKey(root);}finally{fs.rmSync(root,{recursive:true,force:true});}}}
+});
+
+test('cleared background calls retain restart failures and completed-session evidence', {timeout:60000}, async()=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-clear-restart-')), file=path.join(root,'proof.txt');let app=runtime(root);
+  const plans=new Map();
+  const clear=async()=>{
+    const token=(await(await fetch(app.base()+'api/local-actions')).json()).token;
+    const response=await fetch(app.base()+'api/clear-logs',{method:'POST',headers:{Origin:app.base().replace(/\/$/,''),'X-Workspace-Token':token}});
+    assert.equal(response.status,200);return response.json();
+  };
+  try {
+    await app.rpc('initialize');fs.writeFileSync(file,'verified\n');
+    for(const session of ['interrupted','settled']){
+      const proof=await app.call('file_info',{path:file},session);assert(!proof.isError);
+      const plan=[{step:'Verify fixture',status:'completed',activity_ids:[proof.structuredContent.activity_id]}];plans.set(session,plan);
+      assert(!(await app.call('update_plan',{path:root,plan},session)).isError);
+    }
+    const interrupted=await app.call('exec_command',{cwd:root,shell,cmd:isMac?'sleep 30':'Start-Sleep -Seconds 30',yield_time_ms:0},'interrupted');
+    const settled=await app.call('exec_command',{cwd:root,shell,cmd:isMac?'sleep 2':'Start-Sleep -Seconds 2',yield_time_ms:0},'settled');
+    assert(!interrupted.isError);assert.equal(data(interrupted).running,true);assert(!settled.isError);assert.equal(data(settled).running,true);
+    const before=await(await fetch(app.base()+'api/snapshot')).json();
+    assert.equal(before.activity.find(a=>a.id===interrupted.structuredContent.activity_id).status,'returned');
+    assert((await clear()).kept.running_commands>=1);
+    // The terminal receipt arrives after its initial running receipt was cleared.
+    const terminal=await app.call('read_command',{session_id:data(settled).session_id,yield_time_ms:3000},'settled');
+    assert(!terminal.isError);assert.equal(data(terminal).running,false);assert.equal(data(terminal).exit_code,0);
+    await clear();
+    assert.deepEqual((await(await fetch(app.base()+'api/snapshot')).json()).activity,[],'all command and validation rows were actually cleared');
+    await app.stop();app=runtime(root);await app.rpc('initialize');
+    let lost=data(await app.call('check_task_completion',{path:root},'interrupted'));
+    assert.equal(lost.can_finish,false);assert.equal(lost.running,false);assert.equal(lost.state,'needs_attention');assert.match(lost.last_issue,/PROCESS_RESTARTED/);
+    assert.equal(lost.last_issue_id,interrupted.structuredContent.activity_id);assert.deepEqual(lost.missing_evidence,[],'clearing still preserves successful validation evidence');
+    assert.equal(data(await app.call('check_task_completion',{path:root},'settled')).can_finish,true,'a later terminal proof prevents a false restart failure');
+    // Clearing again and restarting must preserve the same unresolved issue.
+    await clear();await app.stop();app=runtime(root);await app.rpc('initialize');
+    lost=data(await app.call('check_task_completion',{path:root},'interrupted'));
+    assert.equal(lost.can_finish,false);assert.match(lost.last_issue,/PROCESS_RESTARTED/);assert.equal(lost.last_issue_id,interrupted.structuredContent.activity_id);
+    assert.equal(data(await app.call('check_task_completion',{path:root},'settled')).can_finish,true);
+    const recovery=await app.call('file_info',{path:file},'interrupted');assert(!recovery.isError);
+    assert(!(await app.call('update_plan',{path:root,plan:plans.get('interrupted'),resolved_issue_id:lost.last_issue_id,recovery_note:'Rechecked fixture after the interrupted process',recovery_evidence_id:recovery.structuredContent.activity_id},'interrupted')).isError);
+    const resolved=data(await app.call('check_task_completion',{path:root},'interrupted'));assert.equal(resolved.can_finish,true);assert.equal(resolved.recovery_verified,true);
+  } finally {try{await app.stop();}finally{try{deleteTestStateKey(root);}finally{fs.rmSync(root,{recursive:true,force:true});}}}
 });
 
 test('Windows credential store round trip uses an isolated synthetic target',{skip:isMac},()=>{

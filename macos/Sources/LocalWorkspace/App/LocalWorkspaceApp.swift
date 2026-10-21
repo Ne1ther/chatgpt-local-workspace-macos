@@ -7,6 +7,7 @@ struct LocalWorkspaceApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var store = WorkspaceStore()
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var bootstrapped = false
     var body: some Scene {
@@ -17,17 +18,15 @@ struct LocalWorkspaceApp: App {
                 // before relying on a window's content appearing.
                 delegate.store = store
                 delegate.reopenMainWindow = { openWindow(id: "main") }
+                delegate.openAppSettings = { openSettings() }
+                delegate.configureStatusItem()
                 guard !bootstrapped else { return }
                 bootstrapped = true
                 delegate.showMainWindow()
+                // Explicit developer/relaunch action: reuse the saved connection
+                // without UI automation or screen capture. Normal launch stays idle.
+                if CommandLine.arguments.contains("--connect"), store.canConnect { store.connect() }
             }
-        MenuBarExtra(isInserted: $store.showMenuBarIcon) {
-            StatusMenuView(store: store, delegate: delegate)
-        } label: {
-            Image(nsImage: WorkspaceBrand.menuBarImage)
-                .accessibilityLabel("ChatGPT Codex Workspace")
-        }
-        .menuBarExtraStyle(.menu)
         Settings { ConnectionSettings(store: store) }
     }
 
@@ -36,6 +35,7 @@ struct LocalWorkspaceApp: App {
             MainWindowRoot(store: store, delegate: delegate)
         }
         .defaultSize(width: 1240, height: 800)
+        .windowToolbarStyle(.unifiedCompact)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -66,6 +66,13 @@ struct LocalWorkspaceApp: App {
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var store: WorkspaceStore?
     var reopenMainWindow: (() -> Void)?
+    var openAppSettings: (() -> Void)?
+    private var statusItemController: WorkspaceStatusItemController?
+    func configureStatusItem() {
+        guard statusItemController == nil, let store else { return }
+        statusItemController = WorkspaceStatusItemController(store: store, delegate: self)
+    }
+    func showSettings() { openAppSettings?(); NSApp.activate(ignoringOtherApps: true) }
     let presenceController = AppPresenceController()
     private var terminationSignal: DispatchSourceSignal?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "community.localworkspace.mac", category: "Windowing")

@@ -5,6 +5,8 @@ import Observation
 @MainActor @Observable
 final class WorkspaceStore {
     var destination: Destination? = .overview
+    var selectedThreadID = ""
+    var showsAllActivity = false
     var state: ConnectionState = .stopped
     var showMenuBarIcon = UserDefaults.standard.object(forKey: "showMenuBarIcon") as? Bool ?? true {
         didSet {
@@ -20,21 +22,31 @@ final class WorkspaceStore {
     }
     var tunnelID = UserDefaults.standard.string(forKey: "tunnelID") ?? ""
     var apiKey = ""
+    private var credentialAccessDeferred = false
+    private var savedAPIKey: String?
+    private(set) var reusesExistingConnection = false
+    var savedCredentialAvailable: Bool { credentialAccessDeferred && apiKey.isEmpty }
     var settingsMessage = ""
+    var operationMessage = ""
+    @ObservationIgnored private let credentialRead: @Sendable (Bool) throws -> String?
+    @ObservationIgnored private let credentialSave: @Sendable (String) throws -> Void
     var issue: String?
     var dashboardURL: URL?
     var dashboardRevision = UUID()
     @ObservationIgnored let dashboardSession = WorkspaceDashboardSession()
+    let localAccess = LocalAccessController()
     var coreVersion = WorkspaceCore.version
     var logs: [LogEntry] = []
     var activity: [ActivityEntry] = []
     var conversations: [Conversation] = []
     var diagnostics: String?
+    var diagnosticReport: NativeDiagnosticReport?
     var diagnosticsBusy = false
     var localCheckPassed = false
     var actualCallObserved = false
     var snapshotStale = false
     var busy = false
+    var activeCommandCount = 0
     private var process: Process?
     private var input: Pipe?
     private var output: Pipe?
@@ -54,27 +66,89 @@ final class WorkspaceStore {
     private var timeouts: [Int: Task<Void, Never>] = [:]
     private var hiddenActivityIDs: Set<String> = []
     private var latestBackendActivityIDs: Set<String> = []
+    private var tunnelLogFold = TunnelLogFold()
 
     var running: Bool { process?.isRunning == true }
-    var canConnect: Bool { tunnelID.trimmingCharacters(in: .whitespacesAndNewlines).range(of: "^tunnel_[A-Za-z0-9]+$", options: .regularExpression) != nil && apiKey.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10 }
+    var activeCallCount: Int { activity.filter { !$0.isConnectionEvent && $0.status == "running" }.count }
+    var activeWorkCount: Int { max(activeCallCount, activeCommandCount) }
+    var recommendations: [WorkspaceAdvice] {
+        WorkspaceHealthAdvisor.recommendations(state: state, stale: snapshotStale, observed: actualCallObserved,
+                                              activity: activity, access: localAccess.report)
+    }
+    var canConnect: Bool { tunnelID.trimmingCharacters(in: .whitespacesAndNewlines).range(of: "^tunnel_[A-Za-z0-9]+$", options: .regularExpression) != nil && (apiKey.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10 || (apiKey.isEmpty && credentialAccessDeferred)) }
     var supportURL: URL { URL(string: "https://developers.openai.com/api/docs/guides/secure-mcp-tunnels")! }
     var resourceURL: URL { Bundle.main.resourceURL!.appendingPathComponent("Backend") }
     var tunnelStatusURL: URL? { healthURL()?.appendingPathComponent("ui") }
 
-    init() {
-        do { apiKey = try KeychainStore.read() }
-        catch { settingsMessage = error.localizedDescription }
+    init(loadSavedConnection: Bool = true,
+         credentialRead: @escaping @Sendable (Bool) throws -> String? = { try KeychainStore.read(useProduction: $0) },
+         credentialSave: @escaping @Sendable (String) throws -> Void = { try KeychainStore.save($0) }) {
+        self.credentialRead = credentialRead
+        self.credentialSave = credentialSave
+        dashboardSession.onThreadChange = { [weak self] thread in self?.selectedThreadID = thread }
+        guard loadSavedConnection else { return }
+        if Bundle.main.bundleIdentifier?.hasSuffix(".preview") == true {
+            if !tunnelID.isEmpty && KeychainStore.hasSavedKey() {
+                credentialAccessDeferred = true
+            } else if let existingID = UserDefaults(suiteName: KeychainStore.productionService)?.string(forKey: "tunnelID"),
+                      existingID.range(of: "^tunnel_[A-Za-z0-9]+$", options: .regularExpression) != nil,
+                      (tunnelID.isEmpty || tunnelID == existingID),
+                      KeychainStore.hasSavedKey(useProduction: true) {
+                // Reuse the user's saved connection by reference. Secret data
+                // stays in the original Keychain item until an explicit action.
+                tunnelID = existingID
+                credentialAccessDeferred = true
+                reusesExistingConnection = true
+            }
+            return
+        }
+        // A non-interactive data read can still block in Security.framework.
+        // Startup only checks presence; decrypt only after an explicit connect.
+        credentialAccessDeferred = KeychainStore.hasSavedKey()
     }
 
     func saveSettings() {
-        do {
-            guard canConnect else { throw WorkspaceError(message: "请填写有效的 Tunnel ID 和运行密钥。") }
-            apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-            try KeychainStore.save(apiKey)
-            tunnelID = tunnelID.trimmingCharacters(in: .whitespacesAndNewlines)
-            UserDefaults.standard.set(tunnelID, forKey: "tunnelID")
-            settingsMessage = "已保存。运行密钥保存在 macOS 钥匙串。"
-        } catch { settingsMessage = error.localizedDescription }
+        guard !running, !busy else { return }
+        busy = true; operationMessage = "正在保存连接配置。"
+        let expected = generation
+        startup = Task {
+            do {
+                _ = try await persistConnection(resolveCredential: false)
+                guard generation == expected, !Task.isCancelled else { return }
+                busy = false; operationMessage = ""; startup = nil
+            } catch {
+                guard generation == expected, !Task.isCancelled else { return }
+                settingsMessage = error.localizedDescription
+                busy = false; operationMessage = ""; startup = nil
+            }
+        }
+    }
+
+    private func persistConnection(resolveCredential: Bool) async throws -> String {
+        try Task.checkCancellation()
+        guard canConnect else { throw WorkspaceError(message: "请填写有效的 Tunnel ID 和运行密钥。") }
+        let expected = generation
+        let supplied = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tunnel = tunnelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let useProduction = reusesExistingConnection
+        let writeKey = !supplied.isEmpty && supplied != savedAPIKey
+        var resolved = supplied
+        if supplied.isEmpty && credentialAccessDeferred && resolveCredential {
+            operationMessage = "正在读取运行密钥；如有钥匙串提示，请确认本应用。"
+            let reader = credentialRead
+            resolved = try await Task.detached { try reader(useProduction) ?? "" }.value
+        } else if writeKey {
+            let writer = credentialSave
+            try await Task.detached { try writer(supplied) }.value
+        }
+        try Task.checkCancellation()
+        guard generation == expected else { throw CancellationError() }
+        if resolveCredential && resolved.isEmpty { throw WorkspaceError(message: "钥匙串中没有可用的运行密钥，请在连接设置中重新填写。") }
+        if writeKey { savedAPIKey = supplied; credentialAccessDeferred = false; reusesExistingConnection = false }
+        tunnelID = tunnel
+        UserDefaults.standard.set(tunnel, forKey: "tunnelID")
+        settingsMessage = "已保存。运行密钥保存在 macOS 钥匙串。"
+        return resolved
     }
 
     private func redacted(_ value: String) -> String {
@@ -105,10 +179,11 @@ final class WorkspaceStore {
                                            status: row.status, startedAt: row.startedAt, elapsedMs: row.elapsedMs,
                                            errorCode: row.errorCode.map(redacted))
         }
-        activity = Array(merged.values.sorted {
+        let next = Array(merged.values.sorted {
             if $0.startedAt == $1.startedAt { return $0.id > $1.id }
             return $0.startedAt > $1.startedAt
         }.prefix(WorkspaceCore.activityLimit))
+        if activity != next { activity = next }
     }
 
     func clearActivity() {
@@ -119,8 +194,32 @@ final class WorkspaceStore {
     func reviewActivity(_ entry: ActivityEntry?) {
         guard let entry, !entry.isConnectionEvent, dashboardURL != nil else { return }
         destination = .workbench
+        selectedThreadID = entry.threadId
+        showsAllActivity = false
         if let url = dashboardURL { _ = dashboardSession.view(for: url, revision: dashboardRevision) }
         dashboardSession.showActivity(entry)
+    }
+
+    func selectConversation(_ id: String) {
+        selectedThreadID = id
+        showsAllActivity = false
+        destination = .workbench
+        dashboardSession.selectThread(id)
+    }
+
+    func openAllActivity() {
+        selectedThreadID = ""
+        showsAllActivity = true
+        destination = .workbench
+        dashboardSession.selectThread("")
+    }
+
+    func registerConversation() {
+        destination = .workbench
+        selectedThreadID = ""
+        showsAllActivity = true
+        dashboardSession.selectThread("")
+        dashboardSession.showSetup()
     }
 
     private func receive(_ data: Data, channel: String, generation expected: UUID) {
@@ -139,9 +238,12 @@ final class WorkspaceStore {
                 continue
             }
             if line.isEmpty { continue }
+            let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
+            let folded = tunnelLogFold.ingest(line, object: object)
+            if let summary = folded.summary { log(summary, recordActivity: false) }
+            if folded.folded { continue }
             var message = line
-            if let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-               let value = object["msg"] as? String { message = value + " " + line }
+            if let value = object?["msg"] as? String { message = value + " " + line }
             if let range = message.range(of: #"\[Dashboard\] (http://127\.0\.0\.1:\d+/)"#, options: .regularExpression) {
                 let urlText = String(message[range]).replacingOccurrences(of: "[Dashboard] ", with: "")
                 if let url = URL(string: urlText), WorkspaceLocalURL.isSafe(url) { dashboardURL = url }
@@ -166,8 +268,13 @@ final class WorkspaceStore {
         child.executableURL = launch
         child.arguments = [executable.path] + arguments
         var environment = ProcessInfo.processInfo.environment
-        for name in ["MCP_COMMAND", "MCP_SERVER_URL", "TUNNEL_CLIENT_CONFIG", "TUNNEL_CLIENT_PROFILE", "TUNNEL_CLIENT_PROFILE_FILE", "CONTROL_PLANE_API_KEY", "WORKSPACE_TUNNEL_ID", "WORKSPACE_TUNNEL_HEALTH_FILE", "CLOUDFLARED_MANAGED", "CLOUDFLARED_TUNNEL_TOKEN"] { environment.removeValue(forKey: name) }
+        for name in ["MCP_COMMAND", "MCP_SERVER_URL", "TUNNEL_CLIENT_CONFIG", "TUNNEL_CLIENT_PROFILE", "TUNNEL_CLIENT_PROFILE_FILE", "CONTROL_PLANE_API_KEY", "WORKSPACE_TUNNEL_ID", "WORKSPACE_TUNNEL_HEALTH_FILE", "WORKSPACE_EPHEMERAL_STATE", "CLOUDFLARED_MANAGED", "CLOUDFLARED_TUNNEL_TOKEN"] { environment.removeValue(forKey: name) }
         environment["PATH"] = (environment["PATH"] ?? "") + ":/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+        environment["WORKSPACE_DESKTOP_VERSION"] = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        if let data = try? Data(contentsOf: resourceURL.appendingPathComponent("runtime-components.json")),
+           let components = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+            environment["WORKSPACE_TUNNEL_VERSION"] = components["tunnel"]
+        }
         environment.merge(additions) { _, new in new }
         child.environment = environment
         child.currentDirectoryURL = sessionDirectory ?? FileManager.default.homeDirectoryForCurrentUser
@@ -196,13 +303,15 @@ final class WorkspaceStore {
     }
 
     func connect() {
-        guard canConnect, !busy else { issue = "请先在连接设置中填写 Tunnel ID 和运行密钥。"; return }
+        guard canConnect, !busy, !running else { issue = "请先在连接设置中填写 Tunnel ID 和运行密钥。"; return }
         stop()
-        saveSettings()
-        state = .starting; busy = true; issue = nil
+        state = .starting; busy = true; issue = nil; operationMessage = "正在准备连接。"
         let expected = generation
         startup = Task {
             do {
+                let key = try await persistConnection(resolveCredential: true)
+                guard generation == expected, !Task.isCancelled else { return }
+                operationMessage = "正在启动本地服务。"
                 let directory = FileManager.default.temporaryDirectory.appendingPathComponent("local-workspace-session-" + UUID().uuidString)
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
                 sessionDirectory = directory
@@ -215,7 +324,7 @@ final class WorkspaceStore {
                     "--control-plane.base-url", "https://api.openai.com",
                     "--health.listen-addr", "127.0.0.1:0", "--health.url-file", health.path,
                     "--log.format", "json", "--log.level", "info"
-                ], environment: ["CONTROL_PLANE_API_KEY": apiKey, "MCP_COMMAND": command,
+                ], environment: ["CONTROL_PLANE_API_KEY": key, "MCP_COMMAND": command,
                                  "WORKSPACE_TUNNEL_ID": tunnelID, "WORKSPACE_TUNNEL_HEALTH_FILE": health.path])
                 log("正在启动官方 Tunnel，等待就绪。")
                 for _ in 0..<60 {
@@ -223,7 +332,7 @@ final class WorkspaceStore {
                     guard generation == expected, running else { return }
                     if let url = healthURL(), await probe(url.appendingPathComponent("readyz")) {
                         guard generation == expected else { return }
-                        state = .connected; busy = false
+                        state = .connected; busy = false; operationMessage = ""
                         log("隧道已就绪。请在 ChatGPT 刷新插件并调用 get_workspace_status 验证实际连接。")
                         destination = .workbench
                         return
@@ -246,7 +355,7 @@ final class WorkspaceStore {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
                 testDirectory = directory
                 try launch(executable: resourceURL.appendingPathComponent("workspace-server"), arguments: ["--mcp"],
-                           environment: ["WORKSPACE_STATE_DIR": directory.appendingPathComponent("state").path])
+                           environment: ["WORKSPACE_STATE_DIR": directory.appendingPathComponent("state").path, "WORKSPACE_EPHEMERAL_STATE": "1"])
                 _ = try await rpc("initialize", params: ["protocolVersion": "2025-06-18", "capabilities": [:], "clientInfo": ["name": "mac-local-check", "version": "1.0"]])
                 let discovery = try await rpc("tools/list")
                 let count = (discovery["tools"] as? [Any])?.count ?? 0
@@ -258,8 +367,12 @@ final class WorkspaceStore {
                 let path = directory.appendingPathComponent("检查.txt").path
                 _ = try await call("write_file", ["path": path, "content": "macOS 本地工作区检查通过\n", "thread_id": tid])
                 _ = try await call("read_file", ["path": path, "thread_id": tid])
-                let shell = try await call("exec_command", ["cwd": directory.path, "cmd": "printf 'macOS-shell-ok'", "yield_time_ms": 1000, "thread_id": tid])
+                let shell = try await call("exec_command", ["cwd": directory.path, "cmd": "printf 'macOS-shell-ok'; sleep 2; printf '\\nmacOS-async-ok'", "yield_time_ms": 100, "thread_id": tid])
                 guard (shell["output"] as? String)?.contains("macOS-shell-ok") == true else { throw WorkspaceError(message: "Shell 检查未通过。") }
+                guard let session = shell["session_id"] as? String else { throw WorkspaceError(message: "命令会话未返回。") }
+                let completed = try await call("read_command", ["session_id": session, "yield_time_ms": 5000, "thread_id": tid])
+                guard (completed["output"] as? String)?.contains("macOS-async-ok") == true,
+                      completed["running"] as? Bool == false else { throw WorkspaceError(message: "异步命令读取未通过。") }
                 _ = try await call("get_workspace_status", ["thread_id": tid])
                 guard generation == expected else { return }
                 localCheckPassed = true; busy = false
@@ -311,19 +424,21 @@ final class WorkspaceStore {
             var tick = 0
             while !Task.isCancelled && generation == expected {
                 if let url = dashboardURL {
-                    var request = URLRequest(url: url.appendingPathComponent("api/snapshot")); request.timeoutInterval = 2
+                    var request = URLRequest(url: url.appendingPathComponent("api/native-status")); request.timeoutInterval = 2
                     do {
                         let (data, response) = try await URLSession.shared.data(for: request)
                         guard generation == expected else { return }
                         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw WorkspaceError(message: "状态读取失败") }
                         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
                         let snapshot = try decoder.decode(DashboardSnapshot.self, from: data)
+                        activeCommandCount = snapshot.commands?.filter(\.running).count ?? 0
                         latestBackendActivityIDs = Set(snapshot.activity.map(\.id))
                         hiddenActivityIDs.formIntersection(latestBackendActivityIDs)
                         mergeActivity(snapshot.activity)
                         var known = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
                         for conversation in snapshot.conversations { known[conversation.id] = conversation }
-                        conversations = known.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+                        let next = known.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+                        if conversations != next { conversations = next }
                         if let version = snapshot.version, !version.isEmpty { coreVersion = String(version.prefix(32)) }
                         snapshotStale = false
                     } catch { if generation == expected { snapshotStale = true } }
@@ -352,6 +467,7 @@ final class WorkspaceStore {
         let resources = resourceURL, tunnel = tunnelID, key = apiKey
         diagnosticTask = Task {
             var report: String?
+            var structuredReport: NativeDiagnosticReport?
             if let base {
                 do {
                     var request = URLRequest(url: base.appendingPathComponent("api/diagnostics")); request.timeoutInterval = 12
@@ -366,6 +482,8 @@ final class WorkspaceStore {
                         let label = status == "pass" ? "通过" : status == "fail" ? "未通过" : status == "pending" ? "待验证" : "未检查"
                         return "\($0["label"] as? String ?? "检查")：\(label)\n\($0["detail"] as? String ?? "")"
                     }.joined(separator: "\n\n")
+                    let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    structuredReport = try? decoder.decode(NativeDiagnosticReport.self, from: data)
                 } catch is CancellationError { return }
                 catch { /* A failed/stale backend must not block standalone configuration diagnosis. */ }
             }
@@ -374,6 +492,7 @@ final class WorkspaceStore {
                 report! += "\n\n本地程序：\(FileManager.default.isExecutableFile(atPath: resources.appendingPathComponent("workspace-server").path) ? "可用" : "缺失")\n实际 ChatGPT 调用：\(actualCallObserved ? "已观察到" : "待验证")"
             }
             guard !Task.isCancelled, diagnosticGeneration == expected else { return }
+            diagnosticReport = structuredReport
             diagnostics = redacted(report ?? "未收到诊断结果。") + "\n\n核心 \(coreVersion) · \(WorkspaceCore.toolCount) 个工具\n计划、对话与近期活动在本地加密保存。历史恢复仅覆盖工具直接修改的文件；命令进程、Shell 副作用与图片预览不会跨重启恢复。"
             diagnosticsBusy = false
             doctor = nil
@@ -389,10 +508,12 @@ final class WorkspaceStore {
         doctor = nil
         diagnosticsBusy = false
         diagnostics = nil
+        diagnosticReport = nil
     }
 
     func stop() {
         closeDiagnostics()
+        localAccess.invalidate()
         let wasActive = running || busy
         generation = UUID()
         startup?.cancel(); startup = nil
@@ -419,6 +540,10 @@ final class WorkspaceStore {
         sessionDirectory = nil; testDirectory = nil; healthFile = nil
         dashboardSession.reset()
         dashboardURL = nil; buffers = [:]; state = .stopped; busy = false
+        operationMessage = ""
+        activeCommandCount = 0
+        selectedThreadID = ""
+        showsAllActivity = false
         actualCallObserved = false
         if wasActive { log("连接已停止，保留上次操作记录。计划、对话与近期活动已本地保存；命令进程不跨重启恢复。") }
         snapshotStale = !activity.isEmpty

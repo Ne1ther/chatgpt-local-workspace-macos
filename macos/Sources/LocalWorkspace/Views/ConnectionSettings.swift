@@ -40,6 +40,7 @@ struct ConnectionSettings: View {
                     Text("默认 Shell：zsh")
                         .font(.caption).foregroundStyle(.secondary)
                     Spacer(minLength: 12)
+                    if store.busy { Button("取消") { store.stop() } }
                     Button("保存") { store.saveSettings() }
                         .disabled(store.running || store.busy)
                     Button("保存并连接", systemImage: "link") { store.connect() }
@@ -68,7 +69,7 @@ struct ConnectionSettings: View {
                     }
                     GridRow {
                         Text("运行密钥").frame(width: 84, alignment: .leading)
-                        SecureField("运行密钥", text: $store.apiKey, prompt: Text("API Key"))
+                        SecureField("运行密钥", text: $store.apiKey, prompt: Text(store.savedCredentialAvailable ? "已保存，连接时读取" : "API Key"))
                             .labelsHidden()
                             .accessibilityLabel("运行密钥")
                     }
@@ -78,6 +79,11 @@ struct ConnectionSettings: View {
                 .controlSize(.large)
                 .disabled(store.running || store.busy)
 
+                if store.reusesExistingConnection {
+                    Label("沿用已有连接", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Divider()
                 Label {
                     Text("密钥仅保存在 macOS 钥匙串。请填写具有 Tunnel 使用权限的 API Key，不是 ChatGPT 密码。")

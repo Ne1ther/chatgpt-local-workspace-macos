@@ -1,8 +1,8 @@
 import AppKit
 import Foundation
 
-// Original vector artwork: two linked workspaces with a local command prompt.
-// AppKit renders every icon size directly, so small Dock/menu icons stay crisp.
+// Package the selected Interlace artwork. No rasterized presentation-board crops
+// or code-drawn approximations: the two dedicated masters are the source assets.
 let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
 let resources = root.appendingPathComponent("macos/Resources", isDirectory: true)
 let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("workspace-icons-\(UUID().uuidString)", isDirectory: true)
@@ -10,144 +10,127 @@ let iconset = temporary.appendingPathComponent("AppIcon.iconset", isDirectory: t
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 defer { try? FileManager.default.removeItem(at: temporary) }
 
-func color(_ hex: UInt32, alpha: CGFloat = 1) -> NSColor {
-    NSColor(srgbRed: CGFloat((hex >> 16) & 255) / 255, green: CGFloat((hex >> 8) & 255) / 255,
-            blue: CGFloat(hex & 255) / 255, alpha: alpha)
-}
-
-func drawAppIcon() {
-    let tile = NSBezierPath(roundedRect: NSRect(x: 80, y: 88, width: 864, height: 864), xRadius: 196, yRadius: 196)
-    NSGraphicsContext.saveGraphicsState()
-    let shadow = NSShadow()
-    shadow.shadowColor = color(0x292826, alpha: 0.24)
-    shadow.shadowBlurRadius = 30
-    shadow.shadowOffset = NSSize(width: 0, height: -16)
-    shadow.set()
-    color(0xE7E3DC).setFill()
-    tile.fill()
-    NSGraphicsContext.restoreGraphicsState()
-
-    NSGradient(colors: [color(0xD9D6D0), color(0xECE9E3), color(0xFAF8F3)])!
-        .draw(in: tile, angle: 90)
-    color(0xFFFFFF, alpha: 0.8).setStroke()
-    tile.lineWidth = 3
-    tile.stroke()
-
-    // Two overlapping windows express the web-to-local connection. Warm ceramic,
-    // graphite and brushed silver replace the conventional blue/purple AI glow.
-    let back = NSBezierPath(roundedRect: NSRect(x: 324, y: 398, width: 488, height: 378), xRadius: 76, yRadius: 76)
-    NSGraphicsContext.saveGraphicsState()
-    let backShadow = NSShadow()
-    backShadow.shadowColor = color(0x292826, alpha: 0.14)
-    backShadow.shadowBlurRadius = 18
-    backShadow.shadowOffset = NSSize(width: 0, height: -8)
-    backShadow.set()
-    color(0xBBBAB5).setFill()
-    back.fill()
-    NSGraphicsContext.restoreGraphicsState()
-    NSGradient(colors: [color(0xA3A39F), color(0xD8D8D2), color(0xF0EEE8)])!
-        .draw(in: back, angle: 90)
-    color(0xFFFFFF, alpha: 0.8).setStroke()
-    back.lineWidth = 3
-    back.stroke()
-
-    let front = NSBezierPath(roundedRect: NSRect(x: 212, y: 254, width: 580, height: 458), xRadius: 82, yRadius: 82)
-    NSGraphicsContext.saveGraphicsState()
-    let frontShadow = NSShadow()
-    frontShadow.shadowColor = color(0x232322, alpha: 0.34)
-    frontShadow.shadowBlurRadius = 28
-    frontShadow.shadowOffset = NSSize(width: 0, height: -16)
-    frontShadow.set()
-    color(0x28292B).setFill()
-    front.fill()
-    NSGraphicsContext.restoreGraphicsState()
-    NSGradient(colors: [color(0x242527), color(0x303234), color(0x454749)])!
-        .draw(in: front, angle: 90)
-    color(0xFFFFFF, alpha: 0.22).setStroke()
-    front.lineWidth = 3
-    front.stroke()
-
-    NSGraphicsContext.saveGraphicsState()
-    front.addClip()
-    let divider = NSBezierPath()
-    divider.move(to: NSPoint(x: 212, y: 624))
-    divider.line(to: NSPoint(x: 792, y: 624))
-    divider.lineWidth = 2
-    color(0xFFFFFF, alpha: 0.11).setStroke()
-    divider.stroke()
-    for x in [278.0, 309.0, 340.0] {
-        color(0xD5D2CB, alpha: 0.62).setFill()
-        NSBezierPath(ovalIn: NSRect(x: x - 8, y: 661, width: 16, height: 16)).fill()
+func load(_ name: String) throws -> (NSImage, NSBitmapImageRep) {
+    let data = try Data(contentsOf: resources.appendingPathComponent("Brand/\(name).png"))
+    guard let bitmap = NSBitmapImageRep(data: data), let cg = bitmap.cgImage else {
+        fatalError("Invalid icon master: \(name)")
     }
-    NSGraphicsContext.restoreGraphicsState()
-
-    let prompt = NSBezierPath()
-    prompt.move(to: NSPoint(x: 328, y: 541))
-    prompt.line(to: NSPoint(x: 406, y: 472))
-    prompt.line(to: NSPoint(x: 328, y: 403))
-    prompt.move(to: NSPoint(x: 482, y: 403))
-    prompt.line(to: NSPoint(x: 588, y: 403))
-    prompt.lineWidth = 35
-    prompt.lineCapStyle = .round
-    prompt.lineJoinStyle = .round
-    color(0xF5F1E9).setStroke()
-    prompt.stroke()
+    return (NSImage(cgImage: cg, size: NSSize(width: bitmap.pixelsWide, height: bitmap.pixelsHigh)), bitmap)
 }
 
-func drawMenuIcon() {
-    NSColor.black.setStroke()
-    let back = NSBezierPath()
-    back.move(to: NSPoint(x: 5.8, y: 14.75))
-    back.line(to: NSPoint(x: 13.8, y: 14.75))
-    back.curve(to: NSPoint(x: 16.0, y: 12.55), controlPoint1: NSPoint(x: 15.05, y: 14.75), controlPoint2: NSPoint(x: 16, y: 13.8))
-    back.line(to: NSPoint(x: 16.0, y: 7.6))
-    back.lineWidth = 1.4
-    back.lineCapStyle = .round
-    back.stroke()
-    let front = NSBezierPath(roundedRect: NSRect(x: 1.75, y: 2.75, width: 11.75, height: 9.9), xRadius: 2.1, yRadius: 2.1)
-    front.lineWidth = 1.4
-    front.stroke()
-    let prompt = NSBezierPath()
-    prompt.move(to: NSPoint(x: 5.0, y: 9.4))
-    prompt.line(to: NSPoint(x: 6.85, y: 7.65))
-    prompt.line(to: NSPoint(x: 5.0, y: 5.9))
-    prompt.lineWidth = 1.4
-    prompt.lineCapStyle = .round
-    prompt.lineJoinStyle = .round
-    prompt.stroke()
+func bounds(_ bitmap: NSBitmapImageRep, threshold: CGFloat) -> NSRect {
+    var left = bitmap.pixelsWide, top = bitmap.pixelsHigh, right = -1, bottom = -1
+    for y in 0..<bitmap.pixelsHigh {
+        for x in 0..<bitmap.pixelsWide where (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > threshold {
+            left = min(left, x); top = min(top, y); right = max(right, x); bottom = max(bottom, y)
+        }
+    }
+    guard right >= left, bottom >= top else { fatalError("Icon master has no visible pixels") }
+    return NSRect(x: left, y: top, width: right - left + 1, height: bottom - top + 1)
 }
 
-func render(pixels: Int, logicalSize: CGFloat, draw: () -> Void) -> Data {
-    let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
-                                  bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                  colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+func render(_ size: NSSize, scale: CGFloat = 1, draw: () -> Void) -> Data {
+    let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale),
+                                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     NSGraphicsContext.saveGraphicsState()
     let context = NSGraphicsContext(bitmapImageRep: bitmap)!
     NSGraphicsContext.current = context
-    let scale = CGFloat(pixels) / logicalSize
+    context.imageInterpolation = .high
     context.cgContext.scaleBy(x: scale, y: scale)
     draw()
     NSGraphicsContext.restoreGraphicsState()
     return bitmap.representation(using: .png, properties: [:])!
 }
 
-try render(pixels: 1024, logicalSize: 1024, draw: drawAppIcon).write(to: resources.appendingPathComponent("AppIcon.png"))
+func drawFitted(_ image: NSImage, pixelBounds: NSRect, in target: NSRect) {
+    let scale = min(target.width / pixelBounds.width, target.height / pixelBounds.height)
+    // NSBitmapImageRep uses top-origin rows; NSImage draws in bottom-origin space.
+    let centerY = image.size.height - pixelBounds.midY
+    image.draw(in: NSRect(x: target.midX - pixelBounds.midX * scale,
+                         y: target.midY - centerY * scale,
+                         width: image.size.width * scale, height: image.size.height * scale))
+}
+
+let (app, appBitmap) = try load("InterlaceApp")
+let (menu, menuBitmap) = try load("InterlaceMenuOptical")
+// The opaque tile's centre cross-section is stable even when a transparent
+// master has tiny edge remnants. Packaging clips to the native rounded tile.
+func tileBounds(_ bitmap: NSBitmapImageRep) -> NSRect {
+    let midX = bitmap.pixelsWide / 2, midY = bitmap.pixelsHigh / 2
+    let xs = (0..<bitmap.pixelsWide).filter { (bitmap.colorAt(x: $0, y: midY)?.alphaComponent ?? 0) > 0.95 }
+    let ys = (0..<bitmap.pixelsHigh).filter { (bitmap.colorAt(x: midX, y: $0)?.alphaComponent ?? 0) > 0.95 }
+    guard let left = xs.first, let right = xs.last, let top = ys.first, let bottom = ys.last else { fatalError("Missing opaque app tile") }
+    return NSRect(x: left, y: top, width: right-left+1, height: bottom-top+1)
+}
+let appBounds = tileBounds(appBitmap)
+let menuBounds = bounds(menuBitmap, threshold: 0.5)
+func appPNG(_ pixels: Int) -> Data {
+    render(NSSize(width: 1024, height: 1024), scale: CGFloat(pixels) / 1024) {
+        // Native safe area, clean alpha silhouette at every icon size.
+        NSBezierPath(roundedRect: NSRect(x: 80, y: 80, width: 864, height: 864), xRadius: 174, yRadius: 174).addClip()
+        drawFitted(app, pixelBounds: appBounds, in: NSRect(x: 80, y: 80, width: 864, height: 864))
+    }
+}
+func menuPNG(_ scale: CGFloat, color: NSColor = .black) -> Data {
+    render(NSSize(width: 20, height: 20), scale: scale) {
+        // Optical-size artwork: broad bands, open counters and a longer baseline.
+        // Keep native status-item width; use more of its available image area.
+        drawFitted(menu, pixelBounds: menuBounds, in: NSRect(x: 1, y: 1, width: 18, height: 18))
+        color.setFill()
+        NSRect(x: 0, y: 0, width: 20, height: 20).fill(using: .sourceIn)
+    }
+}
+try appPNG(1024).write(to: resources.appendingPathComponent("AppIcon.png"))
 for size in [16, 32, 128, 256, 512] {
     for retina in [false, true] {
         let suffix = retina ? "@2x" : ""
-        let pixels = size * (retina ? 2 : 1)
-        try render(pixels: pixels, logicalSize: 1024, draw: drawAppIcon)
-            .write(to: iconset.appendingPathComponent("icon_\(size)x\(size)\(suffix).png"))
+        try appPNG(size * (retina ? 2 : 1)).write(to: iconset.appendingPathComponent("icon_\(size)x\(size)\(suffix).png"))
     }
 }
-for (pixels, suffix) in [(18, ""), (36, "@2x")] {
-    try render(pixels: pixels, logicalSize: 18, draw: drawMenuIcon)
-        .write(to: resources.appendingPathComponent("MenuBarIconTemplate\(suffix).png"))
+for (scale, suffix) in [(CGFloat(1), ""), (CGFloat(2), "@2x")] {
+    let data = menuPNG(scale)
+    try data.write(to: resources.appendingPathComponent("MenuBarIconTemplate\(suffix).png"))
+    let bitmap = NSBitmapImageRep(data: data)!
+    let ink = bounds(bitmap, threshold: 0.1)
+    print("Menu \(bitmap.pixelsWide)x\(bitmap.pixelsHigh)px; ink \(Int(ink.width))x\(Int(ink.height))px")
 }
 let iconutil = Process()
 iconutil.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
 iconutil.arguments = ["-c", "icns", iconset.path, "-o", resources.appendingPathComponent("AppIcon.icns").path]
-try iconutil.run()
-iconutil.waitUntilExit()
+try iconutil.run(); iconutil.waitUntilExit()
 guard iconutil.terminationStatus == 0 else { fatalError("iconutil failed") }
-print("Generated app and menu bar icons.")
+
+// A native asset-size proof, not a screenshot of the user's global menu bar.
+// The symbol and SF Symbols share the same 18pt cells, at 2x pixel density.
+let proof = render(NSSize(width: 620, height: 160), scale: 2) {
+    NSColor(calibratedWhite: 0.96, alpha: 1).setFill()
+    NSRect(x: 0, y: 0, width: 620, height: 160).fill()
+    let icon = NSImage(data: appPNG(256))!
+    icon.draw(in: NSRect(x: 18, y: 16, width: 128, height: 128))
+    for (y, foreground, background) in [(CGFloat(88), NSColor.black, NSColor(calibratedWhite: 0.9, alpha: 1)),
+                                        (CGFloat(40), NSColor.white, NSColor(calibratedWhite: 0.16, alpha: 1))] {
+        background.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 170, y: y - 4, width: 424, height: 28), xRadius: 7, yRadius: 7).fill()
+        NSImage(data: menuPNG(2, color: foreground))!.draw(in: NSRect(x: 189, y: y, width: 20, height: 20))
+        for (index, symbol) in ["wifi", "battery.100", "switch.2"].enumerated() {
+            if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) {
+                let mask = render(NSSize(width: 18, height: 18), scale: 2) {
+                    let source = image.size
+                    let ratio = min(18 / source.width, 14 / source.height)
+                    image.draw(in: NSRect(x: (18 - source.width * ratio) / 2, y: (18 - source.height * ratio) / 2,
+                                          width: source.width * ratio, height: source.height * ratio))
+                    foreground.setFill()
+                    NSRect(x: 0, y: 0, width: 18, height: 18).fill(using: .sourceIn)
+                }
+                NSImage(data: mask)!.draw(in: NSRect(x: 238 + index * 46, y: Int(y) + 1, width: 18, height: 18))
+            }
+        }
+        ("20 pt  ·  optical glyph 18 pt" as NSString).draw(at: NSPoint(x: 380, y: y + 2),
+            withAttributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: foreground])
+    }
+    ("Native asset size proof · 2× pixels" as NSString).draw(at: NSPoint(x: 174, y: 132),
+        withAttributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.darkGray])
+}
+try proof.write(to: root.appendingPathComponent("docs/design-preview/icon-size-proof.png"))
+print("Generated Interlace app icon and native-size menu template.")

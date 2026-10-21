@@ -1,10 +1,12 @@
 # macOS community fork
 
-This fork adds a native macOS app (**Mac 1.4.1 / upstream core 2.3.0, 28 tools**). See [macOS setup and build instructions](README.macos.md). Original Windows documentation and MIT attribution are preserved below. This is not an official OpenAI application.
+This fork adds a native macOS app (**current source: Mac 1.6.0 / upstream core 2.4.1, 23 public tools plus 5 legacy aliases**). See [macOS setup and build instructions](README.macos.md). Original Windows documentation and MIT attribution are preserved below. This is not an official OpenAI application.
+
+The current published package remains **1.4.1 / core 2.3.0**; build from source to use 1.6.0.
 
 ## Download for macOS — no build required
 
-1. Open **[the latest macOS release](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/latest)** and download `ChatGPT-Codex-Workspace-1.4.1-arm64.dmg` from Assets. ZIP and SHA256 checksums are also available. GitHub's automatic “Source code” archives are not the app.
+1. Open **[the macOS 1.4.1 release](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.4.1)** and download `ChatGPT-Codex-Workspace-1.4.1-arm64.dmg` from Assets. ZIP and SHA256 checksums are also available. GitHub's automatic “Source code” archives are not the app.
 2. Open the DMG and drag **ChatGPT Codex Workspace** into **Applications**, then launch it.
 3. Enter your own Tunnel ID and runtime key in the connection settings and configure the ChatGPT plugin using the [connection guide](README.macos.md#连接-chatgpt).
 
@@ -12,7 +14,7 @@ The package is for **Apple Silicon (M-series), macOS 14 or later**. It includes 
 
 This community build is ad-hoc signed, **not Developer ID signed or notarized**. If macOS blocks the first launch, check the download source and follow [Apple's Open Anyway instructions](https://support.apple.com/en-us/102445). Do not disable Gatekeeper. For updates, explicitly quit the old app and replace it with the new download; preferences and Keychain credentials remain separate from the app bundle.
 
-Source compilation is for development; see [the build section](README.macos.md#从源码构建).
+To use the current 1.6.0 source or contribute to development, see [the build section](README.macos.md#从源码构建).
 
 ---
 

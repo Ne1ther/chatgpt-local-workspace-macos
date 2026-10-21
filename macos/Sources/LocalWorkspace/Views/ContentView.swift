@@ -3,56 +3,108 @@ import SwiftUI
 struct ContentView: View {
     @Bindable var store: WorkspaceStore
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sidebarVisible = true
+
+    private enum SidebarSelection: Hashable {
+        case page(Destination), conversation(String)
+    }
+    private var selection: Binding<SidebarSelection?> {
+        Binding(get: {
+            store.destination == .workbench ? .conversation(store.selectedThreadID) : .page(store.destination ?? .overview)
+        }, set: { value in
+            switch value {
+            case .conversation(let id): store.selectConversation(id)
+            case .page(let page): store.destination = page
+            case nil: break
+            }
+        })
+    }
 
     var body: some View {
-        NavigationSplitView {
+        HStack(spacing: 0) {
+            if sidebarVisible {
             VStack(spacing: 0) {
-                List(Destination.allCases, selection: $store.destination) { item in
-                    Label {
-                        Text(item.rawValue)
-                    } icon: {
-                        Image(systemName: item.symbol)
-                            .symbolRenderingMode(.hierarchical)
+                List(selection: selection) {
+                    ForEach(Destination.allCases) { item in
+                        Label { Text(item.rawValue).foregroundStyle(pageSelected(item) ? Color.white : .primary) } icon: {
+                            sidebarSymbol(item.symbol, color: item == .overview ? .indigo : item == .workbench ? .blue : item == .activity ? .purple : .secondary,
+                                          selected: pageSelected(item))
+                        }
+                        .tag(item == .workbench ? SidebarSelection.conversation("") : .page(item))
                     }
-                    .tag(item)
-                    .padding(.vertical, 3)
                 }
                 .listStyle(.sidebar)
+                .scrollDisabled(true)
+                .frame(height: 194)
+                Divider().padding(.horizontal, 16)
+                // Project scrolling never displaces the fixed primary navigation.
+                List(selection: selection) {
+                    Section("工作区") {
+                        ForEach(store.conversations) { conversation in
+                            Label {
+                                Text(conversation.title).lineLimit(1)
+                                    .foregroundStyle(store.destination == .workbench && store.selectedThreadID == conversation.id ? Color.white : .primary)
+                            } icon: {
+                                sidebarSymbol("folder.fill", color: .blue, selected: store.destination == .workbench && store.selectedThreadID == conversation.id)
+                            }
+                            .help(conversation.path ?? conversation.title)
+                            .tag(SidebarSelection.conversation(conversation.id))
+                        }
+                        Label { Text("未归属").foregroundStyle(store.destination == .workbench && store.selectedThreadID == "unassigned" ? Color.white : .primary) } icon: { sidebarSymbol("tray.fill", color: .orange, selected: store.destination == .workbench && store.selectedThreadID == "unassigned") }
+                            .tag(SidebarSelection.conversation("unassigned"))
+                    }
+                }
+                .listStyle(.sidebar)
+                .font(.system(size: 13))
+                .tint(.accentColor)
                 Divider()
                 VStack(alignment: .leading, spacing: 12) {
-                    StatusLabel(state: store.state)
-                    Text("\(WorkspaceCore.toolCount) 个工具 · macOS")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Button { store.registerConversation() } label: {
+                        Label("登记对话", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.dashboardURL == nil)
                     SettingsLink {
-                        Label("连接与显示", systemImage: "slider.horizontal.3")
-                            .font(.callout)
+                        Label("连接与显示", systemImage: "gearshape")
                     }
                     .buttonStyle(.plain)
                     .help("连接与显示（⌘,）")
+                    Divider().padding(.vertical, 2)
+                    StatusLabel(state: store.state)
                 }
+                .font(.callout)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(18)
             }
-            .navigationSplitViewColumnWidth(min: 176, ideal: 200, max: 235)
-        } detail: {
+            .frame(width: 224)
+            .background(.regularMaterial)
+            .transition(.move(edge: .leading).combined(with: .opacity))
+            }
             VStack(spacing: 0) {
                 if let issue = store.issue { issueBanner(issue) }
                 destinationView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .navigationTitle((store.destination ?? .overview).rawValue)
             .toolbar {
-                ToolbarItem(placement: .status) { StatusLabel(state: store.state) }
+                ToolbarItem(placement: .navigation) {
+                    Button {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { sidebarVisible.toggle() }
+                    } label: { Label("显示或隐藏侧栏", systemImage: "sidebar.left") }
+                    .keyboardShortcut("s", modifiers: [.command, .option])
+                    .help("显示或隐藏侧栏（⌥⌘S）")
+                }
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button { store.openBrowser() } label: {
                         Label("在浏览器打开", systemImage: "safari")
                     }
                     .disabled(store.dashboardURL == nil)
                     .help("在浏览器打开工作台")
-                    Button { store.showDiagnostics() } label: {
-                        Label("诊断连接", systemImage: "stethoscope")
-                    }
-                    .help("诊断连接")
                     Menu {
+                        Button("诊断连接", systemImage: "stethoscope") { store.showDiagnostics() }
+                        Divider()
                         Button("打开 Tunnel 状态页", systemImage: "network") { store.openTunnelStatus() }
                             .disabled(store.tunnelStatusURL == nil)
                         Divider()
@@ -69,66 +121,63 @@ struct ContentView: View {
                         Button("清空日志", systemImage: "trash") { store.logs.removeAll() }
                         Button("清空操作记录", systemImage: "clock.arrow.circlepath") { store.clearActivity() }
                             .disabled(store.activity.isEmpty)
+                        Divider()
+                        Button("停止连接", systemImage: "stop.circle") { store.stop() }
+                            .disabled(!store.running && !store.busy)
                     } label: {
                         Label("更多", systemImage: "ellipsis.circle")
                     }
                     .help("更多工作区操作")
-                    Button {
-                        if store.running || store.busy { store.stop() }
-                        else if store.canConnect { store.connect() }
-                        else { openSettings() }
-                    } label: {
-                        Label(store.running || store.busy ? "停止" : "连接 ChatGPT",
-                              systemImage: store.running || store.busy ? "stop.fill" : "link")
+                    if !store.running && !store.busy {
+                        Button {
+                            if store.canConnect { store.connect() } else { openSettings() }
+                        } label: { Label("连接 ChatGPT", systemImage: "link") }
                     }
-                    .help(store.running || store.busy ? "停止当前连接" : "连接 ChatGPT")
                 }
             }
+        }
+        .onChange(of: scenePhase) {
+            store.dashboardSession.setVisible(scenePhase == .active && store.destination == .workbench && (!store.selectedThreadID.isEmpty || store.showsAllActivity))
         }
         .sheet(isPresented: Binding(get: { store.diagnostics != nil }, set: { if !$0 { store.closeDiagnostics() } })) {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(spacing: 12) {
-                    WorkspaceSymbol(name: "stethoscope", size: 40)
-                    Text("连接诊断").font(.title2.weight(.semibold))
-                    if store.diagnosticsBusy { ProgressView().controlSize(.small) }
-                }
-                Divider()
-                ScrollView {
-                    Text(store.diagnostics ?? "")
-                        .font(.callout)
-                        .lineSpacing(4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                }
-                HStack {
-                    Button("复制诊断", systemImage: "doc.on.doc") { store.copy(store.diagnostics ?? "") }
-                        .disabled(store.diagnosticsBusy)
-                    Spacer()
-                    Button(store.diagnosticsBusy ? "取消" : "完成") { store.closeDiagnostics() }
-                        .keyboardShortcut(.defaultAction)
-                }
-            }
-            .padding(WorkspaceStyle.pagePadding)
-            .frame(width: 540, height: 480)
+            ConnectionDiagnosticsView(store: store)
         }
+    }
+
+    private func pageSelected(_ page: Destination) -> Bool {
+        store.destination == page && (page != .workbench || store.selectedThreadID.isEmpty)
+    }
+    private func sidebarSymbol(_ name: String, color: Color, selected: Bool = false) -> some View {
+        Image(systemName: name)
+            .resizable()
+            .scaledToFit()
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(selected ? .white : color)
+            .frame(width: 18, height: 18)
+            .frame(width: 20, height: 20)
     }
 
     @ViewBuilder private var destinationView: some View {
         switch store.destination ?? .overview {
-        case .overview: OverviewView(store: store)
+        case .overview: WorkspaceHomeView(store: store)
         case .workbench:
             if let url = store.dashboardURL {
-                VStack(spacing: 0) {
-                    if store.state == .local {
-                        Label("本地自检记录 · 尚未连接 ChatGPT", systemImage: "checkmark.shield")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(.quaternary.opacity(0.4))
-                        Divider()
-                    }
+                if store.selectedThreadID.isEmpty && !store.showsAllActivity {
+                    ConversationsView(store: store)
+                } else {
+                    VStack(spacing: 0) {
+                        if store.showsAllActivity {
+                            HStack {
+                                Button("全部对话", systemImage: "chevron.left") { store.selectConversation("") }
+                                    .buttonStyle(.plain)
+                                Spacer()
+                            }.font(.callout).padding(.horizontal, 24).padding(.vertical, 10)
+                        }
                     DashboardView(session: store.dashboardSession, url: url, revision: store.dashboardRevision)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .onAppear { store.dashboardSession.setVisible(true) }
+                        .onDisappear { store.dashboardSession.setVisible(false) }
+                    }
                 }
             } else {
                 ContentUnavailableView {
@@ -143,6 +192,7 @@ struct ContentView: View {
                 }
             }
         case .activity: ActivityView(store: store)
+        case .access: LocalCapabilitiesView(store: store)
         case .logs: LogsView(store: store)
         }
     }

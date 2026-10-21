@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 enum WorkspaceBrand {
+    static let menuBarSize: CGFloat = 20
     static let appIcon: NSImage = {
         if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "png"),
            let image = NSImage(contentsOf: url) { return image }
@@ -9,12 +10,12 @@ enum WorkspaceBrand {
     }()
 
     static let menuBarImage: NSImage = {
-        let image = NSImage(size: NSSize(width: 18, height: 18))
+        let image = NSImage(size: NSSize(width: menuBarSize, height: menuBarSize))
         for suffix in ["", "@2x"] {
             if let url = Bundle.main.url(forResource: "MenuBarIconTemplate\(suffix)", withExtension: "png"),
                let data = try? Data(contentsOf: url),
                let representation = NSBitmapImageRep(data: data) {
-                representation.size = NSSize(width: 18, height: 18)
+                representation.size = NSSize(width: menuBarSize, height: menuBarSize)
                 image.addRepresentation(representation)
             }
         }

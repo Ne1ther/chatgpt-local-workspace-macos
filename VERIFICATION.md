@@ -1,5 +1,14 @@
 # macOS Fork 验证记录
 
+## macOS 1.6.0 · 2026-10-21
+
+- Swift Release 与自包含后端构建通过，应用深度签名校验通过。正式应用已覆盖安装至 `/Applications/ChatGPT Codex Workspace.app`，版本 1.6.0、build 10，核心 2.4.1；启动进程来自安装路径，原生与后端可执行文件校验值均与本次构建一致。
+- `npm test`：33 项，32 通过、1 项 Windows 专用测试跳过、0 失败。覆盖 23 个公开工具及 5 个兼容名称、文件和命令、持久证据、目录访问、原生建议、本地检查、清理保护和实际浏览器工作台。
+- 新增回归确认：清空时间线后，未完成命令在两次重启后仍报告 `PROCESS_RESTARTED`；后续结束回执不会误报，成功证据仍保留。暂停同步时切换对话仅加载一次，旧内容及迟到响应不会混入新对话，恢复后继续轮询。
+- 覆盖安装前后，原有持久数据文件校验值保持一致。该验证不代表本轮重新验收了真实 ChatGPT 网页连接、系统权限面板或 24 小时持续运行；既有安装包版本仍为 1.4.1。
+
+## macOS 1.4.0 · 2026-09-30
+
 2026-09-30：Mac 应用 1.4.0，基于上游 2.3.0 / 6c29708。
 
 - `npm test`：13 项通过、0 失败；Windows Credential Manager 专属用例在 macOS 明确跳过。包含全部 28 MCP 工具及输出 Schema、双时代协议/确认/长任务、文件哈希/预演/冲突恢复、请求去重/输出分页、进程树停止/超时、重启后任务/历史/证据、Git 私有基准不改 index/HEAD，以及真实浏览器工作台浅深色/窄屏回归。
@@ -67,7 +76,7 @@ Embedded multi-size assets/local-workspace.ico in EXE; editable SVG retained. Wi
 - 在已登录的 ChatGPT 网页版“设置 → 插件 → 本地工作区 → 信息”点击“刷新”，操作列表从旧 6 个更新为 22 个；同时加载 review-v4 模板。没有卸载、重建插件或更换访问权限。
 - 在真实新聊天仅调用 get_workspace_status，返回 version=1.3.0、tool_count=22、running_commands=0，实际路径 E:/my_space/local-workspace-plugin/dist/LocalWorkspace.exe。
 - 已查看真实聊天卡片的渲染：工作区状态、完成标记、版本、工具数量、程序路径、历史活动及完整工具名称均显示。该次仅为只读诊断，没有执行命令或修改业务文件；不据此声称所有长命令交互已完成真实客户端验收。
-- 验收会话：https://chatgpt.com/c/6aaa4351-b794-83e9-8ecb-addd9bb9f7fd
+- 验收会话：`<PRIVATE_CHAT_URL>`
 - README 与升级说明已补充准确的设置入口。此次修复为更新宿主已有连接的工具元数据，未改动 EXE；仍从原 dist 启动，现有服务保持运行。
 - 本次没有生成临时脚本、截图文件或构建目录；work 目录为空。验收页面保留给用户。
 
@@ -102,7 +111,7 @@ Embedded multi-size assets/local-workspace.ico in EXE; editable SVG retained. Wi
 - 并发读取改造曾暴露 Git 子进程继承协议 stdin 导致超时，已改为独立 stdin 并立即关闭；完整 Git 回归通过。
 - 浏览器隔离预览检查浅色、深色、360px 窄屏布局、持续活动与暂停恢复。该模拟验收与以下真实验收分别记录。
 - 已在真实 ChatGPT 设置页刷新现有插件，操作列表出现 24 个工具、新版描述与 activity-v1 资源。没有卸载或重建插件。
-- 真实验收聊天 https://chatgpt.com/c/6aaa5319-7ba8-83e8-ac2b-ee35f9902bab ：模型调用 render_workspace 后成功挂载实时面板，时间戳持续更新；保持显示按钮实际进入画中画，返回聊天也正常。
+- 真实验收聊天 `<PRIVATE_CHAT_URL>` ：模型调用 render_workspace 后成功挂载实时面板，时间戳持续更新；保持显示按钮实际进入画中画，返回聊天也正常。
 - 聊天第二轮被宿主引导到工作模式，最终模型声明没有执行权限，未执行测试命令。随后通过 Codex 当前已授权的同一插件连接调用一次 Git Bash 只读测试命令（输出 start，等待 12 秒，再输出 end）；没有修改项目文件。原 ChatGPT 面板自动观察到运行中和首段输出，并在保持显示模式下自动更新为退出码 0、12.3 秒和完整输出。没有重新调用 render_workspace。该验证证明真实面板可跨调用持续观察，不证明 ChatGPT 第二轮模型获得了执行权限。
 - 真实验收中曾发生一次宿主响应超时，面板明确暂停，点击恢复更新后成功恢复并完成上述动态验收；不承诺宿主连接永不超时。
 - 正式 GUI/Tunnel/MCP 进程保持运行；readyz 最终返回 HTTP 200。桌面 ChatGPT 客户端实际渲染尚待用户验证，不以网页验收替代桌面验收。
@@ -117,7 +126,7 @@ Embedded multi-size assets/local-workspace.ico in EXE; editable SVG retained. Wi
 - tests/mcp.test.cjs 在最终构建完整通过；tests/patch.test.cjs、tests/activity.test.cjs、tests/card.test.cjs（21/21）在本轮通过。独立活动读取 5 ms，未被 3160 ms 的命令等待阻塞。
 - 浏览器实际查看隔离页面：每秒输出逐行增长，后台命令时间线跟随运行状态与执行耗时；A/B 同目录对话切换后，计划／时间线／命令分别显示。根据渲染结果修正并排布局、复选框间距和长路径行高。
 - 线上已点击 ChatGPT 设置中的刷新；实际页面出现 register_conversation 及各工具 thread_id 输入字段。
-- 正式真实会话 https://chatgpt.com/c/6aaa5998-98c8-83e8-8305-59a5070d7248 成功登记“独立工作台正式验收”，随后显式绑定该实际 chat ID，并调用带相同 thread_id 的 file_info。正式本地网页自动出现对应名称、ChatGPT 跳转链接及 README.md 操作时间线（2 ms）与回执。当前本机地址 http://127.0.0.1:2474/ ，重启后地址可能变化，应通过桌面入口重新打开。
+- 正式真实会话 `<PRIVATE_CHAT_URL>` 成功登记“独立工作台正式验收”，随后显式绑定该实际 chat ID，并调用带相同 thread_id 的 file_info。正式本地网页自动出现对应名称、ChatGPT 跳转链接及 README.md 操作时间线（2 ms）与回执。当前本机地址 http://127.0.0.1:2474/ ，重启后地址可能变化，应通过桌面入口重新打开。
 - 正式聊天的 exec_command 被宿主安全层拦截，未到达本机；未绕过或重试。不能把隔离命令测试写成正式 ChatGPT 命令授权成功。未到达本机的调用和模型内部思考不会出现在工作台。
 - 临时预览端口 43502、58227 均无监听；测试目录已清理，work 为空，被浏览器扩展阻止的 Chrome 测试标签页已关闭。保留正式本地工作台及真实验收聊天。
 
@@ -153,7 +162,7 @@ Embedded multi-size assets/local-workspace.ico in EXE; editable SVG retained. Wi
 
 ## 浏览器自动选择与视觉验收补齐（2026-09-16 19:05）
 
-- 缺口：测试与两个验收脚本各自写死一个浏览器可执行文件，而自带的 Playwright Chromium 没有安装（期望 C:\Users\86185\AppData\Local\ms-playwright\chromium-1243\chrome-win64\chrome.exe，缓存里只有一个残留目录 b），候选起不来时只能跳过或直接失败，看起来就是“浏览器验收未完成”，也没有说明是哪一个候选失败。
+- 缺口：测试与两个验收脚本各自写死一个浏览器可执行文件，而自带的 Playwright Chromium 没有安装（期望 <用户项目目录> b），候选起不来时只能跳过或直接失败，看起来就是“浏览器验收未完成”，也没有说明是哪一个候选失败。
 - 现状核对：本机 Chrome 启动 346–991 ms、Edge 1177–1885 ms，两者都能正常启动，未复现 Edge 启动超时；超时更像发生在候选写死或启动等待过短的场景，不是 Edge 本身不可用。
 - 改动：新增 scripts/browser-launch.cjs，按 WORKSPACE_TEST_BROWSER → 自带 Chromium → 系统 Chrome（含 x86）→ 系统 Edge → Linux 路径逐个尝试，每个候选 25 秒（WORKSPACE_BROWSER_TIMEOUT 可调），附带 --no-first-run、--no-default-browser-check 等参数；返回并打印实际使用的浏览器。测试与 work/audit-dashboard.cjs、work/live-audit.cjs 改为共用它，浏览器先起、预览服务后起，全部候选失败才跳过并列出各自原因。
 - 视觉验收：node work/audit-dashboard.cjs 在 Chrome 下点遍 17 个调用，problems 为空；1920/1366/640 浅色与 1920/640 深色的 scrollWidth 均等于 clientWidth；截图 work/audit-1920.png、audit-1366.png、audit-640.png、audit-dark-1920.png、audit-dark-640.png。

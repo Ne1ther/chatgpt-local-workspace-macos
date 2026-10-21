@@ -24,3 +24,9 @@ macos/.build/
 macos/backend/bin/
 macos/backend/obj/
 dist-macos/
+
+# Local design research and rendering proofs
+/design-qa.md
+/docs/design-preview/
+/macos/Resources/Brand/InterlaceMenu.png
+/script/render_*_proof.*

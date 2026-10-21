@@ -63,7 +63,7 @@ static class WorkspaceTasks
         string issue=Convert.ToString(commands["issue"]),issueId=Convert.ToString(commands["issue_id"]);DateTime issueAt=(DateTime)commands["issue_at"];
         if((DateTime)observation["failure_at"]>issueAt){issueAt=(DateTime)observation["failure_at"];issue=Convert.ToString(observation["failure"]);issueId=Convert.ToString(observation["failure_id"]);}
         // Updating a timestamp alone never resolves a failure. Closure is explicit and auditable.
-        bool recoveryValid=p.ResolvedIssue==issueId&&!string.IsNullOrWhiteSpace(p.RecoveryNote)&&(string.IsNullOrEmpty(p.RecoveryEvidence)||WorkspaceActivity.Evidence(p.RecoveryEvidence,p.Path,p.Thread,issueAt));
+        bool recoveryValid=(p.ResolvedIssue==issueId||WorkspaceActivity.SameFailure(p.ResolvedIssue,issueId,p.Path,p.Thread))&&!string.IsNullOrWhiteSpace(p.RecoveryNote)&&(string.IsNullOrEmpty(p.RecoveryEvidence)||WorkspaceActivity.Evidence(p.RecoveryEvidence,p.Path,p.Thread,issueAt));
         bool unresolved=issue.Length>0&&!recoveryValid;
         bool ready=p.State=="active"&&unfinished.Length==0&&evidence.Length==0&&!running&&!unresolved;
         string state=p.State!="active"?p.State:running?"running":unresolved?"needs_attention":ready?"ready":unfinished.Length==0?"verification_required":(DateTime.UtcNow-last).TotalMinutes>=2?"idle_unconfirmed":"active";

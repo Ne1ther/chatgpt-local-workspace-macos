@@ -7,7 +7,7 @@ const path = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const Ajv = require('ajv');
 
-test('macOS: all 28 tools, isolation, POSIX process lifecycle and MCP compatibility', { timeout: 90000 }, async t => {
+test('macOS: 23 advertised tools and 5 compatible aliases, isolation, POSIX process lifecycle and MCP compatibility', { timeout: 90000 }, async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-mac-integration-')));
   const stateService = 'community.localworkspace.mac.state-encryption.test.' + path.basename(root);
   const exe = process.env.WORKSPACE_TEST_EXE || path.resolve(__dirname, '../dist-macos/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server');
@@ -69,12 +69,14 @@ test('macOS: all 28 tools, isolation, POSIX process lifecycle and MCP compatibil
     const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'mac-integration', version: '1' } });
     assert.equal(init.result.protocolVersion, '2025-06-18');
     const list = (await rpc('tools/list')).result.tools;
-    assert.equal(list.length, 28);
+    assert.equal(list.length, 23);
     const ajv = new Ajv({ strict: false });
     for (const item of list) schemas.set(item.name, ajv.compile(item.outputSchema));
     assert(list.find(x => x.name === 'exec_command').inputSchema.properties.shell.enum.includes('zsh'));
     const status = await tool('get_workspace_status');
-    assert.equal(status.default_shell, 'zsh'); assert.equal(status.tool_count, 28);
+    assert.equal(status.version, '2.4.1');
+    assert.deepEqual([...status.deprecated_tools].sort(), ['file_info','list_commands','poll_command','read_workspace_activity','stop_command'].sort());
+    assert.equal(status.default_shell, 'zsh'); assert.equal(status.tool_count, 23);
     assert(status.executable.endsWith('workspace-server')); assert.equal(status.host_session_observed, true);
     const conversation = await tool('register_conversation', { path: root, title: 'macOS 中文检查' });
     assert(conversation.thread_id);
@@ -146,8 +148,10 @@ test('macOS: all 28 tools, isolation, POSIX process lifecycle and MCP compatibil
     const stdin = await tool('exec_command', { cwd: root, cmd: 'read -r value; printf "received:%s" "$value"', yield_time_ms: 0 });
     await tool('write_stdin', { session_id: stdin.session_id, chars: 'hello 中文\n' });
     const inputResult = await tool('poll_command', { session_id: stdin.session_id, yield_ms: 3000 });
-    assert(inputResult.full_output.includes('received:hello 中文'));
-    assert.equal((await tool('read_command', { session_id: stdin.session_id })).output_mode, 'snapshot');
+    assert.equal(inputResult.deprecated.tool, 'poll_command');
+    const inputSnapshot = await tool('read_command', { session_id: stdin.session_id });
+    assert(inputSnapshot.output.includes('received:hello 中文'));
+    assert.equal(inputSnapshot.output_mode, 'snapshot');
     assert((await tool('list_commands')).commands.length >= 4);
     const tree = await tool('exec_command', { cwd: root, cmd: 'sleep 60 & echo $!; wait', yield_time_ms: 300 });
     const sleeper = Number(tree.output.trim()); assert(sleeper > 0);
@@ -217,10 +221,18 @@ test('macOS: all 28 tools, isolation, POSIX process lifecycle and MCP compatibil
     assert.equal((await fetch(new URL('/api/open?target=' + encodeURIComponent(root), base), { method: 'POST' })).status, 403);
     const snapshot = await (await fetch(new URL('/api/snapshot', base))).json();
     assert(snapshot.conversations.length >= 2); assert(snapshot.activity.length > 10);
+    const native = await (await fetch(new URL('/api/native-status', base))).json();
+    assert.deepEqual(native.activity.map(row => row.id), snapshot.activity.map(row => row.id), 'native metadata preserves the complete activity list');
+    assert.deepEqual(native.conversations, snapshot.conversations);
+    assert(native.activity.every(row => !('detail' in row) && !('preview' in row)), 'native polling never transfers file bodies or receipts');
+    assert(native.commands.every(command => typeof command.running === 'boolean' && !('output' in command)), 'native polling omits command output');
+    assert(Buffer.byteLength(JSON.stringify(native)) < Buffer.byteLength(JSON.stringify(snapshot)), 'native status is smaller than the rendered dashboard snapshot');
+    assert.equal((await fetch(new URL('/api/native-status', base), { headers: { Origin: 'https://example.com' } })).status, 403);
+    t.diagnostic('Native metadata: ' + Buffer.byteLength(JSON.stringify(native)) + ' bytes; full dashboard: ' + Buffer.byteLength(JSON.stringify(snapshot)) + ' bytes.');
     const diagnostics = await (await fetch(new URL('/api/diagnostics', base))).json();
     assert.equal(diagnostics.checks.find(c => c.label === '配置自检').status, 'pass');
     assert.equal(diagnostics.checks.find(c => c.label === '隧道就绪').status, 'unavailable');
-    assert.deepEqual([...seen].sort(), list.map(x => x.name).sort());
+    assert.deepEqual([...seen].sort(), [...list.map(x => x.name), ...status.deprecated_tools].sort());
     for (const name of fs.readdirSync(path.join(root, '.state')).filter(name => name.endsWith('.bin'))) {
       assert.equal(fs.statSync(path.join(root, '.state', name)).mode & 0o777, 0o600, 'encrypted state is owner-only');
     }

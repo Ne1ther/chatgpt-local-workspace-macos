@@ -9,9 +9,38 @@ static class WorkspaceThreads
     static readonly object Gate=new object();
     static readonly List<Conversation> Items=WorkspaceStore.Load("threads",()=>new List<Conversation>());
     static string Meta(Dictionary<string,object> meta,string name){object value;if(meta==null||!meta.TryGetValue(name,out value))return "";var text=value as string;if(text==null||text.Length>512)throw new ArgumentException("Invalid host conversation metadata");return text;}
+    // Lenient read for other hosts' metadata: an unexpected shape is ignored, never fatal.
+    static string Optional(Dictionary<string,object> meta,string name){object value;if(meta==null||!meta.TryGetValue(name,out value))return "";var text=value as string;return text==null||text.Length>512?"":text.Trim();}
+    static Dictionary<string,object> CodexTurn(Dictionary<string,object> meta)
+    {
+        object value;if(meta==null||!meta.TryGetValue("x-codex-turn-metadata",out value)||value==null)return null;
+        var map=value as Dictionary<string,object>;if(map!=null)return map;
+        var text=value as string;if(text==null||text.Length>8192)return null;
+        try{return new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string,object>>(text);}catch{return null;}
+    }
+    // Codex sends x-codex-turn-metadata.turn_id per model turn; other hosts have no turn identifier.
+    public static string TurnId(Dictionary<string,object> meta)
+    {
+        var turn=CodexTurn(meta);if(turn==null)return null;
+        string id=Optional(turn,"turn_id");return id.Length==0||id.Length>128?null:id;
+    }
+    const string CodexKeyPrefix="codex:";
+    // conversations[].source: manual (registered, no host signal), codex (Codex threadId) or chatgpt (openai/session).
+    public static string Source(string hostKey){return hostKey==null?"manual":hostKey.StartsWith(CodexKeyPrefix,StringComparison.Ordinal)?"codex":"chatgpt";}
+    // Codex sends threadId (stable across resume) instead of openai/session.
+    static string CodexThread(Dictionary<string,object> meta)
+    {
+        string thread=Optional(meta,"threadId");if(thread.Length>0)return thread;
+        var turn=CodexTurn(meta);return turn==null?"":Optional(turn,"thread_id");
+    }
     public static string HostKey(Dictionary<string,object> meta)
     {
-        string session=Meta(meta,"openai/session");if(session.Length==0)return "";
+        string session=Meta(meta,"openai/session");
+        if(session.Length==0){
+            string codex=CodexThread(meta);if(codex.Length==0)return "";
+            // The "codex:" prefix only labels the source; ChatGPT keys keep their pre-2.4 format.
+            using(var hash=System.Security.Cryptography.SHA256.Create())return CodexKeyPrefix+Convert.ToBase64String(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes("codex:"+codex.Length+":"+codex)));
+        }
         // These opaque hints correlate calls, not authorize access or reveal a /c/ URL.
         string[] parts={Meta(meta,"openai/organization"),Meta(meta,"openai/subject"),session};
         using(var hash=System.Security.Cryptography.SHA256.Create())return Convert.ToBase64String(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(String.Join("",parts.Select(p=>p.Length+":"+p)))));
@@ -20,15 +49,15 @@ static class WorkspaceThreads
     {
         if(key.Length==0)return Validate(explicitId);
         lock(Gate){
-            Conversation bound=Items.Find(x=>x.HostKey==key),selected=null;
+            Conversation bound=Items.Find(x=>x.HostKey==key),selected=null;bool changed=false;
             if(!string.IsNullOrEmpty(explicitId)&&explicitId!="unassigned"){
                 selected=Items.Find(x=>x.Id==explicitId);if(selected==null)throw new ArgumentException("Unknown thread_id");
                 if((selected.HostKey!=null&&selected.HostKey!=key)||(bound!=null&&bound!=selected))throw new ArgumentException("THREAD_MISMATCH: thread_id belongs to a different host conversation");
-                selected.HostKey=key;bound=selected;
+                changed=selected.HostKey!=key;selected.HostKey=key;bound=selected;
             }
-            if(bound==null){if(Items.Count>=200)throw new ArgumentException("Conversation limit reached (200)");bound=new Conversation{Id="thread-"+Guid.NewGuid().ToString("N"),Title=path.Length>0?DeriveTitle(path):"ChatGPT 对话",Path=path,ChatId="",HostKey=key,Created=DateTime.UtcNow};Items.Add(bound);}
-            if(path.Length>0){bound.Path=path;if(!bound.Named)bound.Title=DeriveTitle(path);}
-            WorkspaceStore.Save("threads",Items);return bound.Id;
+            if(bound==null){if(Items.Count>=200)throw new ArgumentException("Conversation limit reached (200)");bound=new Conversation{Id="thread-"+Guid.NewGuid().ToString("N"),Title=path.Length>0?DeriveTitle(path):"ChatGPT 对话",Path=path,ChatId="",HostKey=key,Created=DateTime.UtcNow};Items.Add(bound);changed=true;}
+            if(path.Length>0&&bound.Path!=path){bound.Path=path;if(!bound.Named)bound.Title=DeriveTitle(path);changed=true;}
+            if(changed)WorkspaceStore.Save("threads",Items);return bound.Id;
         }
     }
     public static string Validate(string id)
@@ -61,5 +90,9 @@ static class WorkspaceThreads
         if(name.Length==0)name="工作区 "+DateTime.UtcNow.ToString("HH:mm");
         return name.Length>120?name.Substring(0,120):name;
     }
-    public static object[] List(){lock(Gate)return Items.Select(c=>new{thread_id=c.Id,title=c.Title,path=c.Path,chat_id=c.ChatId,chat_url=c.ChatId.Length==0?null:"https://chatgpt.com/c/"+c.ChatId,association=c.HostKey==null?"manual":"host_session",created_at=c.Created.ToString("o")}).ToArray();}
+    public static object[] List(Func<string,int> runningCommands=null)
+    {
+        Conversation[] items;lock(Gate)items=Items.ToArray();
+        return items.Select(c=>new{thread_id=c.Id,title=c.Title,path=c.Path,chat_id=c.ChatId,chat_url=c.ChatId.Length==0?null:"https://chatgpt.com/c/"+c.ChatId,association=c.HostKey==null?"manual":"host_session",source=Source(c.HostKey),created_at=c.Created.ToString("o"),stats=WorkspaceActivity.StatsFor(c.Id,runningCommands==null?0:runningCommands(c.Id))}).ToArray();
+    }
 }

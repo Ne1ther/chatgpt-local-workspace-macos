@@ -8,12 +8,20 @@ final class WorkspaceDashboardSession: NSObject, WKNavigationDelegate {
     private(set) var loadedURL: URL?
     private var loadedRevision: UUID?
     private var pendingThread: String?
+    private var currentThread = ""
+    private var pendingSetup = false
+    private var visible = false
+    private var appliedTheme: String?
+    var onThreadChange: ((String) -> Void)?
 
     func view(for url: URL, revision: UUID) -> WKWebView {
         if retainedView == nil {
             let configuration = WKWebViewConfiguration()
             configuration.websiteDataStore = .nonPersistent()
-            let view = WKWebView(frame: .zero, configuration: configuration)
+            configuration.userContentController.add(WorkspaceNavigationHandler(session: self), name: "workspaceNavigation")
+            configuration.userContentController.addUserScript(WKUserScript(source: Self.themeScript(for: NSApp.effectiveAppearance), injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+            let view = NativeWorkspaceWebView(frame: .zero, configuration: configuration)
+            view.appearanceDidChange = { [weak self] in self?.applySystemColors() }
             view.navigationDelegate = self
             view.allowsBackForwardNavigationGestures = false
             retainedView = view
@@ -23,16 +31,47 @@ final class WorkspaceDashboardSession: NSObject, WKNavigationDelegate {
     }
 
     func update(url: URL, revision: UUID) {
+        applySystemColors()
         guard WorkspaceLocalURL.isSafe(url) else { return }
         guard loadedURL != url || loadedRevision != revision else { return }
         loadedURL = url
         loadedRevision = revision
-        retainedView?.load(URLRequest(url: url))
+        appliedTheme = nil
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "native", value: "1")]
+        if !currentThread.isEmpty {
+            var filter = URLComponents()
+            filter.queryItems = [URLQueryItem(name: "thread", value: currentThread)]
+            components.percentEncodedFragment = filter.percentEncodedQuery
+        }
+        pendingThread = nil
+        retainedView?.load(URLRequest(url: components.url!))
     }
 
     func showActivity(_ entry: ActivityEntry) {
-        pendingThread = entry.threadId
+        selectThread(entry.threadId)
+    }
+
+    func selectThread(_ thread: String) {
+        currentThread = thread
+        pendingThread = thread
         if retainedView?.isLoading == false { applyPendingThread() }
+    }
+
+    func showSetup() {
+        pendingSetup = true
+        if retainedView?.isLoading == false { applyPendingSetup() }
+    }
+
+    func setVisible(_ value: Bool) {
+        visible = value
+        retainedView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('workspace-visibility', {detail: \(value)}))")
+    }
+
+    private func applyPendingSetup() {
+        guard pendingSetup, let view = retainedView else { return }
+        pendingSetup = false
+        view.evaluateJavaScript("window.dispatchEvent(new Event('workspace-setup'))")
     }
 
     private func applyPendingThread() {
@@ -44,17 +83,73 @@ final class WorkspaceDashboardSession: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        appliedTheme = nil
+        applySystemColors()
+        setVisible(visible)
         applyPendingThread()
+        applyPendingSetup()
     }
 
     func reset() {
         retainedView?.stopLoading()
         retainedView?.navigationDelegate = nil
+        retainedView?.configuration.userContentController.removeScriptMessageHandler(forName: "workspaceNavigation")
         retainedView?.removeFromSuperview()
         retainedView = nil
         loadedURL = nil
         loadedRevision = nil
         pendingThread = nil
+        currentThread = ""
+        pendingSetup = false
+        appliedTheme = nil
+    }
+
+    private func applySystemColors() {
+        guard let view = retainedView else { return }
+        let script = Self.themeScript(for: view.effectiveAppearance)
+        guard script != appliedTheme else { return }
+        appliedTheme = script
+        view.evaluateJavaScript(script)
+    }
+
+    private static func themeScript(for appearance: NSAppearance) -> String {
+        var tokens: [String: String] = [:]
+        appearance.performAsCurrentDrawingAppearance {
+            let colors: [String: NSColor] = [
+                "--frame": .windowBackgroundColor, "--surface": .controlBackgroundColor,
+                "--subtle": .underPageBackgroundColor, "--block": .textBackgroundColor, "--popover": .controlBackgroundColor,
+                "--text": .labelColor, "--text-body": .labelColor, "--text-2": .secondaryLabelColor,
+                "--text-3": .secondaryLabelColor, "--text-4": .tertiaryLabelColor, "--placeholder": .placeholderTextColor,
+                "--hover": .unemphasizedSelectedContentBackgroundColor, "--selected": .unemphasizedSelectedContentBackgroundColor,
+                "--rail-hover": .unemphasizedSelectedContentBackgroundColor, "--rail-selected": .selectedContentBackgroundColor,
+                "--line": .separatorColor, "--line-soft": .separatorColor, "--line-strong": .separatorColor,
+                "--ok": .systemGreen, "--warn": .systemOrange, "--danger": .systemRed, "--info": .systemBlue,
+                "--background": .windowBackgroundColor, "--foreground": .labelColor,
+                "--card": .controlBackgroundColor, "--card-foreground": .labelColor,
+                "--muted": .controlBackgroundColor, "--muted-foreground": .secondaryLabelColor,
+                "--secondary": .controlColor, "--secondary-foreground": .labelColor,
+                "--accent": .unemphasizedSelectedContentBackgroundColor, "--accent-foreground": .labelColor,
+                "--primary": .controlAccentColor, "--primary-foreground": .white,
+                "--border": .separatorColor, "--input": .separatorColor, "--ring": .controlAccentColor,
+                "--success": .systemGreen, "--warning": .systemOrange, "--destructive": .systemRed,
+            ]
+            for (key, color) in colors {
+                guard let rgb = color.usingColorSpace(.sRGB) else { continue }
+                let components = [rgb.redComponent, rgb.greenComponent, rgb.blueComponent, rgb.alphaComponent].map { max(0, min(255, Int(($0 * 255).rounded()))) }
+                tokens[key] = String(format: "#%02x%02x%02x%02x", components[0], components[1], components[2], components[3])
+            }
+        }
+        let data = try! JSONSerialization.data(withJSONObject: tokens, options: [.sortedKeys])
+        let json = String(decoding: data, as: UTF8.self)
+        return "{ const colors = \(json); for (const el of [document.documentElement, document.getElementById('shell')]) { if (el) for (const [key, value] of Object.entries(colors)) el.style.setProperty(key, value); } }"
+    }
+
+    fileprivate func receiveNavigation(_ message: WKScriptMessage) {
+        guard message.frameInfo.isMainFrame,
+              let url = message.frameInfo.request.url, WorkspaceLocalURL.isSafe(url), url.port == loadedURL?.port,
+              let thread = message.body as? String, thread.count <= 128 else { return }
+        currentThread = thread
+        onThreadChange?(thread)
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
@@ -69,6 +164,22 @@ final class WorkspaceDashboardSession: NSObject, WKNavigationDelegate {
             }
             decisionHandler(.cancel)
         }
+    }
+}
+
+@MainActor private final class NativeWorkspaceWebView: WKWebView {
+    var appearanceDidChange: (() -> Void)?
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        appearanceDidChange?()
+    }
+}
+
+@MainActor private final class WorkspaceNavigationHandler: NSObject, WKScriptMessageHandler {
+    weak var session: WorkspaceDashboardSession?
+    init(session: WorkspaceDashboardSession) { self.session = session }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        session?.receiveNavigation(message)
     }
 }
 
