@@ -4,7 +4,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 APP="dist-macos/ChatGPT Codex Workspace.app"
 # Package the current checkout, not a possibly stale app from an earlier build.
-./script/build_and_run.sh --build-only
+./scripts/build_and_run.sh --build-only
 codesign --verify --deep --strict "$APP"
 ARCH="$(lipo -archs "$APP/Contents/MacOS/LocalWorkspace")"
 case "$ARCH" in

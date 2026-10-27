@@ -132,5 +132,7 @@ let proof = render(NSSize(width: 620, height: 160), scale: 2) {
     ("Native asset size proof · 2× pixels" as NSString).draw(at: NSPoint(x: 174, y: 132),
         withAttributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.darkGray])
 }
-try proof.write(to: root.appendingPathComponent("docs/design-preview/icon-size-proof.png"))
+let proofDirectory = root.appendingPathComponent(".local/design/generated", isDirectory: true)
+try FileManager.default.createDirectory(at: proofDirectory, withIntermediateDirectories: true)
+try proof.write(to: proofDirectory.appendingPathComponent("icon-size-proof.png"))
 print("Generated Interlace app icon and native-size menu template.")

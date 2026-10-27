@@ -1,7 +1,7 @@
 import Foundation
 
 enum Destination: String, CaseIterable, Identifiable {
-    case overview = "概览", workbench = "工作台", activity = "操作记录", access = "本地能力", logs = "诊断日志"
+    case workbench = "工作台", overview = "概览", activity = "操作记录", access = "本地能力", logs = "诊断日志"
     var id: Self { self }
     var symbol: String {
         switch self {
@@ -36,7 +36,7 @@ struct LogEntry: Identifiable {
     var isTool: Bool { text.contains("[Workspace]") }
 }
 
-struct ActivityEntry: Decodable, Identifiable, Equatable {
+struct ActivityEntry: Decodable, Identifiable, Equatable, Sendable {
     let id: String
     let threadId: String
     let tool: String
@@ -70,21 +70,55 @@ struct ActivityEntry: Decodable, Identifiable, Equatable {
     }
 }
 
-struct Conversation: Decodable, Identifiable, Equatable {
+struct Conversation: Decodable, Identifiable, Equatable, Sendable {
     let threadId: String
     let title: String
     let path: String?
     var id: String { threadId }
 }
 
-struct DashboardSnapshot: Decodable {
+/// A directory can host several conversations. Grouping is presentation-only:
+/// selecting a conversation still uses its original thread ID and never moves files.
+struct WorkspaceDirectory: Identifiable {
+    let id: String
+    let path: String?
+    let conversations: [Conversation]
+    let latestActivity: [String: ActivityEntry]
+    var title: String { path.map { URL(fileURLWithPath: $0).lastPathComponent.isEmpty ? $0 : URL(fileURLWithPath: $0).lastPathComponent } ?? "未设置目录" }
+    var displayPath: String { path.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "登记对话时可关联本地文件夹" }
+    var lastActivity: String { latestActivity.values.map(\.startedAt).max() ?? "" }
+
+    static func grouped(_ conversations: [Conversation], activity: [ActivityEntry]) -> [WorkspaceDirectory] {
+        var latest: [String: ActivityEntry] = [:]
+        for entry in activity where !entry.isConnectionEvent {
+            if latest[entry.threadId].map({ $0.startedAt < entry.startedAt }) ?? true { latest[entry.threadId] = entry }
+        }
+        let buckets = Dictionary(grouping: conversations) { conversation in
+            conversation.path.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.path } ?? ""
+        }
+        return buckets.map { key, values in
+            let rows = values.sorted {
+                let left = latest[$0.id]?.startedAt ?? "", right = latest[$1.id]?.startedAt ?? ""
+                return left == right ? $0.title.localizedStandardCompare($1.title) == .orderedAscending : left > right
+            }
+            return WorkspaceDirectory(id: key, path: key.isEmpty ? nil : key, conversations: rows,
+                                      latestActivity: latest.filter { item in values.contains { $0.id == item.key } })
+        }.sorted {
+            if $0.path == nil || $1.path == nil { return $0.path != nil && $1.path == nil }
+            if $0.lastActivity != $1.lastActivity { return $0.lastActivity > $1.lastActivity }
+            return ($0.path ?? "").localizedStandardCompare($1.path ?? "") == .orderedAscending
+        }
+    }
+}
+
+struct DashboardSnapshot: Decodable, Sendable {
     let version: String?
     let activity: [ActivityEntry]
     let conversations: [Conversation]
     let commands: [CommandStatus]?
 }
 
-struct CommandStatus: Decodable {
+struct CommandStatus: Decodable, Sendable {
     let running: Bool
 }
 

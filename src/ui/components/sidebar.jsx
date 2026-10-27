@@ -1,8 +1,10 @@
+import { useMemo, useState } from 'react';
 import { cn } from 'cn';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon, SpinIcon } from './icons.jsx';
 import { since } from '@/lib/format.js';
+import { groupDirectories } from '@/lib/directories.js';
 
 // The app mark: the hand-tuned 20px version of assets/local-workspace.svg (brackets + cursor),
 // pixel-aligned at 20px and 40px. The favicon in the template uses the master.
@@ -56,26 +58,45 @@ export function Sidebar({ conversations, thread, collapsed, rail: railAuto, load
   const pick = id => onSelect(id ? 'thread=' + encodeURIComponent(id) : '');
   const list = conversations || [];
   const rail = collapsed || railAuto;
+  const [query, setQuery] = useState('');
+  const [closed, setClosed] = useState(() => new Set());
+  const directories = useMemo(() => groupDirectories(list, rail ? '' : query), [list, query, rail]);
+  const toggleDirectory = id => setClosed(previous => {
+    const next = new Set(previous);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   return (
     <aside className="sidebar" aria-label="工作区">
       <div className="sidebar-head">
         <span className="brand">{MARK ? <img className="brand-mark" src={MARK} alt="" aria-hidden="true" /> : null}本地工作区</span>
       </div>
       <nav id="threads" className="thread-list" aria-label="对话列表">
-        <Row title="全部对话" icon="layers" active={thread === ''} stats={stats && stats['']} total now={now} rail={rail} onClick={() => pick('')} />
+        <Row title="全部操作" icon="layers" active={thread === ''} stats={stats && stats['']} total now={now} rail={rail} onClick={() => pick('')} />
         <div className="section-label">
-          <span>对话{list.length ? <em className="tabular">{list.length}</em> : null}</span>
+          <span>工作目录{directories.length ? <em className="tabular">{directories.length}</em> : null}</span>
           <Button id="setup-toggle" variant="ghost" size="icon-xs" aria-label="登记对话" title="登记对话" onClick={onSetup}><Icon name="plus" size={14} /></Button>
         </div>
-        {list.map(item => (
+        {!rail && list.length > 0 ? <label className="directory-search"><Icon name="search" size={14} /><input
+          aria-label="搜索目录或对话" placeholder="搜索目录或对话" value={query} onChange={event => setQuery(event.target.value)} /></label> : null}
+        {directories.map(directory => <section className="directory-group" key={directory.id}>
+          {!rail ? <button type="button" className="directory-toggle" aria-expanded={!closed.has(directory.id)}
+            title={directory.path || '登记对话时可关联本地文件夹'} onClick={() => toggleDirectory(directory.id)}>
+            <Icon name={directory.path ? 'folder' : 'inbox'} size={16} />
+            <span className="directory-label"><b>{directory.title}</b><span>{directory.path || '对话尚未关联文件夹'}</span></span>
+            <span className="directory-count tabular">{directory.conversations.length}</span><Icon name="chevronRight" size={12} />
+          </button> : null}
+          {rail || !closed.has(directory.id) ? directory.conversations.map(item => (
           <Row key={item.thread_id} title={item.title || '未命名对话'} initial={Array.from(item.title || '?')[0]} sub
             source={sources[item.thread_id]} active={item.thread_id === thread} stats={stats && stats[item.thread_id]} now={now} rail={rail}
             onClick={() => pick(item.thread_id)} />
-        ))}
+          )) : null}
+        </section>)}
+        {query && !directories.length ? <p className="thread-empty">没有匹配的目录或对话</p> : null}
         {loaded && list.length === 0 ? <p className="thread-empty">还没有登记的对话。点 + 登记后，调用会按对话归类。</p> : null}
       </nav>
       <div className="sidebar-foot">
-        <Row id="unassigned" title="未归属" icon="inbox" active={thread === 'unassigned'} stats={stats && stats.unassigned} now={now} rail={rail} onClick={() => pick('unassigned')} />
+        <Row id="unassigned" title="未归属操作" icon="inbox" active={thread === 'unassigned'} stats={stats && stats.unassigned} now={now} rail={rail} onClick={() => pick('unassigned')} />
         <Row id="diagnostics" title="诊断连接" icon="activity" pressed={false} rail={rail} onClick={onDiagnostics}
           trail={version ? <span id="footer" className="thread-meta version tabular" title={'本地工作区版本 ' + version}>v{version}</span> : null} />
       </div>

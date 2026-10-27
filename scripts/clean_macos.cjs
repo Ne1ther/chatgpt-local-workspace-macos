@@ -12,7 +12,7 @@ function validateRoot(root) {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   if (pkg.name !== 'local-workspace-dashboard' ||
       !fs.existsSync(path.join(root, 'macos/backend/WorkspaceBackend.csproj')) ||
-      !fs.existsSync(path.join(root, 'script/build_and_run.sh'))) {
+      !fs.existsSync(path.join(root, 'scripts/build_and_run.sh'))) {
     throw new Error('Not a Local Workspace source checkout. Nothing removed.');
   }
   return root;
@@ -69,7 +69,7 @@ if (require.main === module) {
   try {
     const args = process.argv.slice(2);
     if (args.some(arg => !['--apply', '--dry-run'].includes(arg))) {
-      throw new Error('Usage: node script/clean_macos.cjs [--apply | --dry-run]');
+      throw new Error('Usage: node scripts/clean_macos.cjs [--apply | --dry-run]');
     }
     const apply = args.includes('--apply') && !args.includes('--dry-run');
     const entries = clean(path.join(__dirname, '..'), { apply });

@@ -4,7 +4,7 @@ shopt -s nullglob
 MODE="${1:-run}"
 case "$MODE" in
   run|--build-only|--install|--verify|--debug|--logs|--telemetry) ;;
-  *) echo 'Usage: script/build_and_run.sh [--build-only|--install|--verify|--debug|--logs|--telemetry]' >&2; exit 2 ;;
+  *) echo 'Usage: scripts/build_and_run.sh [--build-only|--install|--verify|--debug|--logs|--telemetry]' >&2; exit 2 ;;
 esac
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -35,8 +35,8 @@ if [[ ! -x "$TUNNEL_DIR/tunnel-client" ]]; then
     rm -f "$TUNNEL_DIR/release.zip"
 fi
 if [[ ! -d node_modules ]]; then npm ci --no-audit --no-fund; fi
-if [[ ! -f src/ui/assets/macos-symbols.json || script/generate_ui_symbols.swift -nt src/ui/assets/macos-symbols.json ]]; then
-    swift script/generate_ui_symbols.swift "$ROOT_DIR"
+if [[ ! -f src/ui/assets/macos-symbols.json || scripts/generate_ui_symbols.swift -nt src/ui/assets/macos-symbols.json ]]; then
+    swift scripts/generate_ui_symbols.swift "$ROOT_DIR"
 fi
 npm run build:ui
 "$DOTNET" publish macos/backend/WorkspaceBackend.csproj -c Release -r "$RID" -o "$BUILD_STAGE/backend" --nologo
@@ -63,8 +63,8 @@ cp "$TUNNEL_DIR/"*-licenses.txt "$STAGED_APP/Contents/Resources/Licenses/"
 cp "$ROOT_DIR/.tools/dotnet/LICENSE.txt" "$STAGED_APP/Contents/Resources/Licenses/DotNET-MIT.txt"
 cp "$ROOT_DIR/.tools/dotnet/ThirdPartyNotices.txt" "$STAGED_APP/Contents/Resources/Licenses/DotNET-ThirdParty.txt"
 cp macos/Resources/Info.plist "$STAGED_APP/Contents/Info.plist"
-if [[ ! -f macos/Resources/AppIcon.icns || ! -f macos/Resources/AppIcon.png || ! -f macos/Resources/MenuBarIconTemplate.png || ! -f macos/Resources/MenuBarIconTemplate@2x.png || script/generate_icons.swift -nt macos/Resources/AppIcon.icns || macos/Resources/Brand/InterlaceApp.png -nt macos/Resources/AppIcon.icns || macos/Resources/Brand/InterlaceMenuOptical.png -nt macos/Resources/AppIcon.icns ]]; then
-    swift script/generate_icons.swift "$ROOT_DIR"
+if [[ ! -f macos/Resources/AppIcon.icns || ! -f macos/Resources/AppIcon.png || ! -f macos/Resources/MenuBarIconTemplate.png || ! -f macos/Resources/MenuBarIconTemplate@2x.png || scripts/generate_icons.swift -nt macos/Resources/AppIcon.icns || macos/Resources/Brand/InterlaceApp.png -nt macos/Resources/AppIcon.icns || macos/Resources/Brand/InterlaceMenuOptical.png -nt macos/Resources/AppIcon.icns ]]; then
+    swift scripts/generate_icons.swift "$ROOT_DIR"
 fi
 cp macos/Resources/AppIcon.icns macos/Resources/AppIcon.png macos/Resources/MenuBarIconTemplate*.png "$STAGED_APP/Contents/Resources/"
 for binary in "$STAGED_APP/Contents/Resources/Backend/"*.dylib "$STAGED_APP/Contents/Resources/Backend/workspace-server" "$STAGED_APP/Contents/Resources/Backend/workspace-launcher" "$STAGED_APP/Contents/Resources/Backend/tunnel-client"; do
@@ -73,10 +73,10 @@ done
 codesign --force --sign - "$STAGED_APP"
 codesign --verify --deep --strict "$STAGED_APP"
 mkdir -p "$ROOT_DIR/dist-macos"
-./script/install_macos.sh --source "$STAGED_APP" --destination "$ROOT_DIR/dist-macos"
+./scripts/install_macos.sh --source "$STAGED_APP" --destination "$ROOT_DIR/dist-macos"
 case "$MODE" in
   --build-only) echo "Built: $APP_BUNDLE" ;;
-  --install) ./script/install_macos.sh; /usr/bin/open -n "/Applications/$APP_NAME.app" ;;
+  --install) ./scripts/install_macos.sh; /usr/bin/open -n "/Applications/$APP_NAME.app" ;;
   --verify) /usr/bin/open -n "$APP_BUNDLE"; sleep 2; pgrep -x LocalWorkspace >/dev/null; echo "App launched successfully." ;;
   --debug) lldb -- "$APP_BUNDLE/Contents/MacOS/LocalWorkspace" ;;
   --logs|--telemetry) /usr/bin/open -n "$APP_BUNDLE"; /usr/bin/log stream --info --style compact --predicate 'process == "LocalWorkspace"' ;;

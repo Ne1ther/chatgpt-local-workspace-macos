@@ -6,6 +6,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sidebarVisible = true
+    @State private var collapsedDirectories = Set<String>()
 
     private enum SidebarSelection: Hashable {
         case page(Destination), conversation(String)
@@ -41,18 +42,32 @@ struct ContentView: View {
                 Divider().padding(.horizontal, 16)
                 // Project scrolling never displaces the fixed primary navigation.
                 List(selection: selection) {
-                    Section("工作区") {
-                        ForEach(store.conversations) { conversation in
+                    Section("工作目录") {
+                        ForEach(WorkspaceDirectory.grouped(store.conversations, activity: store.activity)) { directory in
+                            DisclosureGroup(isExpanded: Binding(get: { !collapsedDirectories.contains(directory.id) }, set: { value in
+                                if value { collapsedDirectories.remove(directory.id) } else { collapsedDirectories.insert(directory.id) }
+                            })) {
+                            ForEach(directory.conversations) { conversation in
                             Label {
                                 Text(conversation.title).lineLimit(1)
                                     .foregroundStyle(store.destination == .workbench && store.selectedThreadID == conversation.id ? Color.white : .primary)
                             } icon: {
-                                sidebarSymbol("folder.fill", color: .blue, selected: store.destination == .workbench && store.selectedThreadID == conversation.id)
+                                sidebarSymbol("bubble.left", color: .secondary, selected: store.destination == .workbench && store.selectedThreadID == conversation.id)
                             }
-                            .help(conversation.path ?? conversation.title)
+                            .help(conversation.title)
                             .tag(SidebarSelection.conversation(conversation.id))
+                            }
+                            } label: {
+                                Label {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(directory.title).lineLimit(1)
+                                        Text(directory.displayPath).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                                    }
+                                } icon: { sidebarSymbol(directory.path == nil ? "tray" : "folder.fill", color: .blue) }
+                                .help(directory.displayPath)
+                            }
                         }
-                        Label { Text("未归属").foregroundStyle(store.destination == .workbench && store.selectedThreadID == "unassigned" ? Color.white : .primary) } icon: { sidebarSymbol("tray.fill", color: .orange, selected: store.destination == .workbench && store.selectedThreadID == "unassigned") }
+                        Label { Text("未归属操作").foregroundStyle(store.destination == .workbench && store.selectedThreadID == "unassigned" ? Color.white : .primary) } icon: { sidebarSymbol("tray.fill", color: .orange, selected: store.destination == .workbench && store.selectedThreadID == "unassigned") }
                             .tag(SidebarSelection.conversation("unassigned"))
                     }
                 }
@@ -78,7 +93,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(18)
             }
-            .frame(width: 224)
+            .frame(width: 256)
             .background(.regularMaterial)
             .transition(.move(edge: .leading).combined(with: .opacity))
             }
@@ -161,14 +176,13 @@ struct ContentView: View {
         switch store.destination ?? .overview {
         case .overview: WorkspaceHomeView(store: store)
         case .workbench:
-            if let url = store.dashboardURL {
-                if store.selectedThreadID.isEmpty && !store.showsAllActivity {
-                    ConversationsView(store: store)
-                } else {
+            if store.selectedThreadID.isEmpty && !store.showsAllActivity {
+                    WorkspaceLibraryView(store: store)
+            } else if let url = store.dashboardURL {
                     VStack(spacing: 0) {
                         if store.showsAllActivity {
                             HStack {
-                                Button("全部对话", systemImage: "chevron.left") { store.selectConversation("") }
+                                Button("工作目录", systemImage: "chevron.left") { store.selectConversation("") }
                                     .buttonStyle(.plain)
                                 Spacer()
                             }.font(.callout).padding(.horizontal, 24).padding(.vertical, 10)
@@ -178,7 +192,6 @@ struct ContentView: View {
                         .onAppear { store.dashboardSession.setVisible(true) }
                         .onDisappear { store.dashboardSession.setVisible(false) }
                     }
-                }
             } else {
                 ContentUnavailableView {
                     Label(store.state == .connected ? "等待首次调用" : "工作台尚未启动", systemImage: "rectangle.3.group")

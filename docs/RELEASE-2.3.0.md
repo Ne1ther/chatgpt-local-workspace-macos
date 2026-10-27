@@ -29,7 +29,7 @@
 
 API Key 保存到 Windows 凭据管理器的 `LocalWorkspacePlugin/tunnel-api-key`。启动新版桌面程序时，只有在凭据保存成功后才将旧 `settings.json` 中的明文 Key 移除；失败会保留原配置并明确报错。不要在同一配置上混用旧版和新版桌面程序。
 
-正式文件位于 `dist/`，验证构建位于 `dist-next/`。`Apply-Update.ps1 -StageWhileRunning` 可在保留旧进程的情况下替换下次启动的文件，并输出旧映像备份位置。更新磁盘上的程序不代表旧进程已升级；现有连接保持运行，退出旧程序后再启动 `dist/LocalWorkspace.exe`，刷新宿主工具元数据并核对 `version=2.3.0`、`tool_count=28`。旧进程退出时未保存的 2.2.x 内存计划不能由新版追溯恢复。
+正式文件位于 `dist/`，验证构建位于 `dist-next/`。`scripts/windows/Apply-Update.ps1 -StageWhileRunning` 可在保留旧进程的情况下替换下次启动的文件，并输出旧映像备份位置。更新磁盘上的程序不代表旧进程已升级；现有连接保持运行，退出旧程序后再启动 `dist/LocalWorkspace.exe`，刷新宿主工具元数据并核对 `version=2.3.0`、`tool_count=28`。旧进程退出时未保存的 2.2.x 内存计划不能由新版追溯恢复。
 
 ## 实现参考
 

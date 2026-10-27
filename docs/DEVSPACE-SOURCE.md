@@ -10,7 +10,7 @@
 - 本地编辑分支：`local-workspace-reference`。可直接修改源码，无需从压缩或打包产物逆向。
 - 实时 npm registry 显示 `latest=1.0.8`、`beta=1.1.0-beta.4`。上述 beta tag 中的 `package.json` 仍写 `1.0.8`，所以精确版本以 tag 和 commit 为准，不以该字段推断。
 - MIT License，Copyright (c) 2026 Waishnav。原始 `vendor/devspace/LICENSE` 已保留；复制实质代码或再分发时保留该版权和许可。
-- 此次只获取公开源码，没有安装上游依赖、执行其安装/启动脚本、读取其旧账户配置或替换当前服务。源码是可编辑参考，当前运行程序仍由本项目 `src/` 和 `build.ps1` 生成。
+- 此次只获取公开源码，没有安装上游依赖、执行其安装/启动脚本、读取其旧账户配置或替换当前服务。源码是可编辑参考，当前运行程序仍由本项目 `src/` 和 `./scripts/windows/build.ps1` 生成。
 
 ## 上游实际暴露的工具
 

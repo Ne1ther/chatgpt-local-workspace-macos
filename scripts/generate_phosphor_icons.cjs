@@ -15,6 +15,6 @@ const names={image:'image',layers:'stack',dot:'dot-outline',circle:'circle',circ
  const result=Object.fromEntries(Object.entries(names).map(([key,name])=>[key,bodies[name]]));
  const root=path.resolve(__dirname,'..');
  await fs.writeFile(path.join(root,'src/ui/assets/phosphor-icons.json'),JSON.stringify(result)+'\n');
- await fs.copyFile(path.join(root,'docs/design-preview/icon-library-research/phosphor/LICENSE'),path.join(root,'macos/Resources/Phosphor-MIT.txt'));
+ await fs.copyFile(path.join(root,'assets/licenses/Phosphor-MIT.txt'),path.join(root,'macos/Resources/Phosphor-MIT.txt'));
  console.log(`${unique.length} original Phosphor Duotone glyphs, ${Object.keys(names).length} semantic names, pinned ${ref}.`);
 })().catch(e=>{console.error(e.message);process.exitCode=1});

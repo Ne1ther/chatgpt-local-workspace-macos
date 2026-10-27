@@ -1,8 +1,10 @@
 # ChatGPT Codex Workspace for macOS
 
+[项目目录与构建入口](docs/PROJECT-LAYOUT.md) · 工作台按工作目录归组，对话单独列出。
+
 这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的独立 macOS 移植，保留原 macOS 移植并选择性纳入上游 **2.4.1 / f2ab383**。保留原作者与贡献者的 MIT 许可和署名；不是 OpenAI 官方应用，也不代表上游作者发布。
 
-**当前源码为 macOS 1.6.0 / 核心 2.4.1，公开 23 个工具并兼容 5 个旧名称。** 当前已发布安装包仍为 1.4.1 / 核心 2.3.0。使用 1.6.0 请按下方步骤从源码构建。
+**当前源码为 macOS 1.6.1 / 核心 2.4.1，公开 23 个工具并兼容 5 个旧名称。** 当前已发布安装包仍为 1.4.1 / 核心 2.3.0。使用 1.6.1 请按下方步骤从源码构建。
 
 ## 下载安装（无需编译）
 
@@ -28,7 +30,7 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 1. 按 [OpenAI Secure MCP Tunnel 官方指南](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) 获取 Tunnel ID 和运行 API Key，并准备 ChatGPT 开发者模式连接。Tunnel 权限与 ChatGPT 开发者模式权限分别管理。
 2. 在本应用打开 **连接与显示（⌘,）**，填写两个值，选择“保存并连接”。密钥保存在本机钥匙串，Tunnel ID 保存在应用偏好设置。请在应用内填写密钥，不要贴到聊天或源码里。
 3. 等 Mac 应用显示“隧道已就绪”后，打开 ChatGPT 的 Plugins 页面，点击加号 → **Add custom MCP server**。填写名称（例如 Local Workspace Mac）和简介，在 Connection 中选择 **Tunnel**，选本应用使用的同一个 Tunnel ID；按页面要求核对认证及连接信息，选择 **Create as a plugin**，检查发现的工具列表并安装该插件。
-4. 新开一个 ChatGPT 对话，在工具菜单启用刚创建的插件，然后输入“调用 `get_workspace_status` 确认连接”。本地 1.6.0 版本的响应包含 `version: 2.4.1`、`tool_count: 23`（已发布 1.4.1 为核心 2.3.0、28 个工具）、`default_shell: zsh` 和实际 Mac 程序路径。
+4. 新开一个 ChatGPT 对话，在工具菜单启用刚创建的插件，然后输入“调用 `get_workspace_status` 确认连接”。本地 1.6.1 版本的响应包含 `version: 2.4.1`、`tool_count: 23`（已发布 1.4.1 为核心 2.3.0、28 个工具）、`default_shell: zsh` 和实际 Mac 程序路径。
 5. 之后可以直接说“在 `<项目绝对路径>` 里先读取 AGENTS.md、列出目录，不修改文件”，再按需交代具体编辑任务。桌面应用的“实时工作台”显示每次调用、命令输出和修改对比；结束时点“停止”或退出应用。
 
 隧道就绪不代表 ChatGPT 已调用成功。初次调用前，工作台可能显示“等待首次调用”；“诊断连接”会区分隧道状态、工具发现与实际调用。应用必须保持运行，ChatGPT 才能通过该 Tunnel 使用这台 Mac 的工具。
@@ -51,7 +53,7 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 
 关闭主窗口的红色按钮**不会退出应用或断开连接**，已启动的 Tunnel 和本地任务继续运行。默认同时显示菜单栏图标和 Dock 图标；在“连接与显示 → 显示与后台”可独立控制，两项可以同时开启或同时关闭。关闭“在 Dock 显示”后，打开或关闭主窗口和设置窗口均保持隐藏，不再留下运行中的 Dock 图标。两项都关闭时，用 Spotlight 搜索 ChatGPT 或 Codex，或从 Finder 打开应用，即可恢复同一个进程中的主窗口。点击菜单栏图标可打开主窗口、查看连接状态、停止连接或明确退出；Dock 图标也能重新打开主窗口。只有选择“退出 ChatGPT Codex Workspace”或按 `⌘Q` 才会结束应用和它拥有的后台进程。“停止连接”只断开本次服务，应用仍留在后台。
 
-### macOS 1.6.0 源码 / 上游核心 2.4.1
+### macOS 1.6.1 源码 / 上游核心 2.4.1
 
 - “本地能力”检查实际后端对所选目录的读取，以及按需创建、写入、删除临时文件；准确报告权限拒绝与路径缺失，提供系统权限入口。
 - 连接诊断改为逐项状态与版本；概览自动归纳需要处理的问题，侧栏选中项保持文字可读。
@@ -81,7 +83,7 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 
 - 原创“叠层工作区 + 本地终端”应用图标，采用暖白、石墨和金属灰；菜单栏使用同一图形的单色模板，自动适配系统的深浅色外观。
 - 内部操作图标使用 SF Symbols；概览、设置、操作记录和日志统一边距、控件列及图标尺寸。
-- 应用图标的矢量源在 `script/generate_icons.swift`；构建时按需生成 16–1024 像素图标及菜单栏 1×/2× 资源，不依赖第三方图标网站。
+- 应用图标的矢量源在 `scripts/generate_icons.swift`；构建时按需生成 16–1024 像素图标及菜单栏 1×/2× 资源，不依赖第三方图标网站。
 
 ## 功能对应
 
@@ -107,7 +109,7 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 
 ## 已完成的验证
 
-以下为开发阶段的验证记录；1.6.0 的新增功能与验证边界见 [1.6 记录](docs/LOCAL-CAPABILITIES-1.6.md)。
+以下为开发阶段的验证记录；1.6.1 的新增功能与验证边界见 [1.6 记录](docs/LOCAL-CAPABILITIES-1.6.md)。
 
 - 原生 `.app` 编译、启动及实际 SwiftUI / WKWebView 窗口检查。
 - 在隔离临时目录中逐个调用 23 个公开工具及 5 个兼容旧工具，并校验返回结构；实际中文、空格、引号路径读写，BOM 保留，多文件增改移删及路径越界拒绝。
@@ -124,21 +126,21 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 需要 Xcode Command Line Tools / Swift，以及构建工作台所用的 Node/npm。脚本将 .NET SDK 和官方 Tunnel 下载到项目内忽略的 `.tools/` 目录，不改全局运行时。支持在本机架构构建；Intel 分支尚未实机验证。构建完成后可用 `npm run clean:macos` 精简开发目录，已构建 App 可独立运行；下次编译会重新下载依赖。App 的缓存和历史保留方式见[磁盘占用与清理](docs/STORAGE-AND-CLEANUP.md)。
 
 ```sh
-./script/build_and_run.sh             # 构建并启动
-./script/build_and_run.sh --install   # 构建、更新 Applications 中的应用并启动
-./script/build_and_run.sh --verify    # 构建、启动并检查进程
-./script/build_and_run.sh --build-only
-./script/build_preview.sh             # 生成独立 Preview.app，不安装、不自动启动
+./scripts/build_and_run.sh             # 构建并启动
+./scripts/build_and_run.sh --install   # 构建、更新 Applications 中的应用并启动
+./scripts/build_and_run.sh --verify    # 构建、启动并检查进程
+./scripts/build_and_run.sh --build-only
+./scripts/build_preview.sh             # 生成独立 Preview.app，不安装、不自动启动
 npm test                             # macOS 上运行 Mac 集成与工作台回归
 npm run clean:macos                   # 构建后移除项目内的 SDK、依赖与编译缓存
-./script/package_macos.sh             # 先重新构建，再生成 DMG、ZIP 和 SHA256SUMS
+./scripts/package_macos.sh             # 先重新构建，再生成 DMG、ZIP 和 SHA256SUMS
 ```
 
 界面试用可打开 `dist-macos/ChatGPT Codex Workspace Preview.app`。预览使用独立应用标识与偏好；没有独立连接配置时，沿用本机正式版已有的 Tunnel ID 和钥匙串密钥项。启动仅检查密钥项是否存在，不读取密钥内容；设置显示“已保存，连接时读取”，主动保存或连接时才读取，密钥没有修改时不复制或重复写入。预览中新填写的密钥保存在独立项目中。本地检查的临时数据在停止后清理。预览仍在运行时，构建脚本拒绝覆盖它。验证范围见 [1.6 记录](docs/LOCAL-CAPABILITIES-1.6.md)，生产图标来源见 [资源说明](docs/ASSET-SOURCES.md)。
 
-后续修改代码或获取 GitHub 更新后，在项目目录运行 `./script/build_and_run.sh --install` 即可更新本机应用。脚本先在临时目录完成构建与签名验证，通过后才替换 `/Applications/ChatGPT Codex Workspace.app`；编译失败时，已安装版本仍可用。更新只关闭对应路径中的 ChatGPT Codex Workspace，不按进程名停止其他副本。钥匙串中的运行密钥和应用偏好设置独立于 `.app`，更新时保留。安装器会把同标识的旧 `Local Workspace.app` 迁移为新名称；名称变化不会更改钥匙串或偏好设置。
+后续修改代码或获取 GitHub 更新后，在项目目录运行 `./scripts/build_and_run.sh --install` 即可更新本机应用。脚本先在临时目录完成构建与签名验证，通过后才替换 `/Applications/ChatGPT Codex Workspace.app`；编译失败时，已安装版本仍可用。更新只关闭对应路径中的 ChatGPT Codex Workspace，不按进程名停止其他副本。钥匙串中的运行密钥和应用偏好设置独立于 `.app`，更新时保留。安装器会把同标识的旧 `Local Workspace.app` 迁移为新名称；名称变化不会更改钥匙串或偏好设置。
 
-如果已经构建好，只想安装当前构建，可运行 `./script/install_macos.sh`。需要安装到个人应用目录时，先创建 `~/Applications`，再运行 `./script/install_macos.sh --destination "$HOME/Applications"`。安装器会检查应用标识和签名，拒绝覆盖同名的其他应用或符号链接。更新中如果复制或签名验证失败，会保留或恢复原版应用。
+如果已经构建好，只想安装当前构建，可运行 `./scripts/install_macos.sh`。需要安装到个人应用目录时，先创建 `~/Applications`，再运行 `./scripts/install_macos.sh --destination "$HOME/Applications"`。安装器会检查应用标识和签名，拒绝覆盖同名的其他应用或符号链接。更新中如果复制或签名验证失败，会保留或恢复原版应用。
 
 目录：`macos/Sources/LocalWorkspace` 为原生应用；`macos/backend` 是现代 .NET 适配层；`src/` 继续作为共享工具核心，平台差异用 `MACOS` 条件编译隔离。
 

@@ -15,7 +15,7 @@ if [[ -e "$PREVIEW" ]]; then
         fi
     done
 fi
-./script/build_and_run.sh --build-only
+./scripts/build_and_run.sh --build-only
 STAGE="$(mktemp -d "$ROOT_DIR/dist-macos/.preview-build.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 ditto "$ROOT_DIR/dist-macos/ChatGPT Codex Workspace.app" "$STAGE/Preview.app"

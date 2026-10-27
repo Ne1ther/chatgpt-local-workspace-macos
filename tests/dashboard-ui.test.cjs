@@ -285,8 +285,8 @@ test('dashboard', { timeout: 180000 }, async t => {
     await t.test('侧栏用底色标记当前对话，折叠后只留下图标', async () => {
       const active = page.locator('#threads .thread.active');
       assert.equal(await active.count(), 1);
-      assert.match(await active.innerText(), /全部对话/);
-      assert.deepEqual(await page.locator('#threads .thread b').allInnerTexts(), ['全部对话', '本地工作区面板改版'], '未归属与诊断放在底部');
+      assert.match(await active.innerText(), /全部操作/);
+      assert.deepEqual(await page.locator('#threads .thread b').allInnerTexts(), ['全部操作', '本地工作区面板改版'], '未归属与诊断放在底部');
       assert.match(await page.locator('#footer').innerText(), /^v2\.\d+\.\d+/);
       // 有调用在运行时，对应条目右侧显示加载图标而不是数字。
       assert.equal(await page.locator('#threads .thread').first().locator('.thread-meta svg.spin').count(), 1);
@@ -316,8 +316,8 @@ test('dashboard', { timeout: 180000 }, async t => {
       assert.equal(await page.locator('.brand').isVisible(), false, '内嵌在桌面程序里时隐藏品牌名');
       const embeddedRows = await sidebarRows();
       for (const row of embeddedRows) assert(row.nodes.some(node => node.text), '内嵌时侧栏没有只放图标按钮的行：' + JSON.stringify(row.nodes));
-      assert.match(embeddedRows[0].nodes.map(node => node.text).join(' '), /全部对话/, '内嵌时侧栏第一行就是“全部对话”');
-      assert(Math.abs(await centerY('#threads .thread') - await centerY('#title')) <= 2, '内嵌时“全部对话”与标题行对齐');
+      assert.match(embeddedRows[0].nodes.map(node => node.text).join(' '), /全部操作/, '内嵌时侧栏第一行就是“全部操作”');
+      assert(Math.abs(await centerY('#threads .thread') - await centerY('#title')) <= 2, '内嵌时“全部操作”与标题行对齐');
       await page.evaluate(() => document.documentElement.classList.remove('embedded'));
 
       await page.click('#collapse');
@@ -329,6 +329,43 @@ test('dashboard', { timeout: 180000 }, async t => {
       await page.click('#collapse');
       await delay(200);
       assert.equal(await page.locator('#shell.collapsed').count(), 0);
+    });
+
+    await t.test('工作目录按完整路径归组，可搜索、折叠并打开各自的对话', async () => {
+      const other = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+      const sample = require('../scripts/sample-snapshot.cjs')();
+      sample.conversations = [
+        { thread_id: 'thread-local-workspace', title: '工作台更新', path: '/Projects/one/workspace' },
+        { thread_id: 'second', title: '同一目录的第二个对话', path: '/Projects/one/workspace/' },
+        { thread_id: 'another', title: '另一个目录', path: '/Projects/two/workspace' },
+        { thread_id: 'unlinked', title: '未关联的对话', path: null },
+      ];
+      await other.route('**/api/snapshot*', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify(sample) }));
+      try {
+        await other.goto(preview.url);
+        await other.waitForSelector('.directory-toggle');
+        assert.equal(await other.locator('.directory-group').count(), 3);
+        assert.equal(await other.locator('.directory-group').first().locator('.thread').count(), 2);
+        assert.deepEqual(await other.locator('.directory-label b').allTextContents(), ['workspace', 'workspace', '未设置目录']);
+        const search = other.getByRole('textbox', { name: '搜索目录或对话' });
+        await search.fill('第二个');
+        assert.deepEqual(await other.locator('.directory-group .thread b').allTextContents(), ['同一目录的第二个对话']);
+        await search.fill('/Projects/two');
+        assert.deepEqual(await other.locator('.directory-group .thread b').allTextContents(), ['另一个目录']);
+        await search.fill('');
+        const first = other.locator('.directory-group').first();
+        await first.locator('.directory-toggle').click();
+        assert.equal(await first.locator('.thread').count(), 0);
+        await first.locator('.directory-toggle').click();
+        await first.getByRole('button', { name: '同一目录的第二个对话', exact: true }).click();
+        await other.waitForFunction(() => location.hash === '#thread=second' && document.querySelector('#title')?.textContent === '同一目录的第二个对话');
+        assert.equal(await other.locator('#title').innerText(), '同一目录的第二个对话');
+        assert.match(await other.locator('#context').innerText(), /工作目录.*\/Projects\/one\/workspace/s);
+        if (process.env.WORKSPACE_UI_QA_DIR) {
+          const fs = require('node:fs'); fs.mkdirSync(process.env.WORKSPACE_UI_QA_DIR, { recursive: true });
+          await other.screenshot({ path: path.join(process.env.WORKSPACE_UI_QA_DIR, '03-workbench-directories.png'), fullPage: true });
+        }
+      } finally { await other.close(); }
     });
 
     await t.test('执行计划是时间线上方的独立一栏，不压住任何调用行', async () => {
@@ -630,9 +667,9 @@ test('dashboard', { timeout: 180000 }, async t => {
         await other.waitForRequest('**/api/snapshot*', { timeout: 3000 });
         await other.click('#pause');
         assert.match(await other.locator('#connection').innerText(), /已暂停/, '恢复后仍可再次暂停');
-        await other.getByRole('button', { name: '全部对话', exact: true }).click();
+        await other.getByRole('button', { name: '全部操作', exact: true }).click();
         await other.waitForFunction(() => document.querySelectorAll('#timeline .event').length === 2);
-        assert.equal(await other.locator('#title').innerText(), '全部对话', '暂停时也能切回全部对话');
+        assert.equal(await other.locator('#title').innerText(), '全部操作', '暂停时也能切回全部操作');
       } finally {
         releases.forEach(release => release());
         await other.close();
@@ -650,7 +687,7 @@ test('dashboard', { timeout: 180000 }, async t => {
         assert(await nativePage.locator('.event-icon svg path').count() > 0, '真实矢量图标已渲染');
         const firstThread = await nativePage.evaluate(async () => (await (await fetch('/api/snapshot')).json()).conversations[0].thread_id);
         await nativePage.evaluate(id => { location.hash = 'thread=' + encodeURIComponent(id); }, firstThread);
-        await nativePage.waitForFunction(() => document.querySelector('#title').textContent !== '全部对话');
+        await nativePage.waitForFunction(() => document.querySelector('#title').textContent !== '全部操作');
         await nativePage.evaluate(() => window.dispatchEvent(new Event('workspace-setup')));
         await nativePage.getByRole('dialog').waitFor(); await nativePage.keyboard.press('Escape');
         await nativePage.evaluate(() => { location.hash = ''; });

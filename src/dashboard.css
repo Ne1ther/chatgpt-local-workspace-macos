@@ -537,6 +537,21 @@ html.embedded .sidebar-head{display:none}
 .native-shell.app-shell,.native-shell.app-shell:is(.collapsed,.rail){grid-template-columns:minmax(0,1fr)}
 .native-shell .main-sheet{border-left:0;--pad:24px}
 .native-shell .head-sidebar{display:none}
+.directory-search{display:flex;align-items:center;gap:7px;margin:0 4px 12px;padding:7px 8px;border:1px solid var(--line-strong);border-radius:7px;color:var(--text-3);background:var(--surface)}
+.directory-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-size:12px}
+.directory-search:focus-within{outline:2px solid var(--ring);outline-offset:1px}
+.directory-group{margin-bottom:10px;min-width:0}
+.directory-toggle{display:flex;align-items:center;gap:8px;width:100%;min-width:0;padding:8px;border-radius:7px;text-align:left;color:var(--text-2)}
+.directory-toggle:hover{background:var(--rail-hover)}
+.directory-label{display:flex;flex:1;flex-direction:column;gap:3px;min-width:0}
+.directory-label b{font-size:12px;font-weight:600;color:var(--text-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.directory-label>span{font-size:10px;line-height:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3)}
+.directory-count{font-size:11px;color:var(--text-3)}
+.directory-toggle[aria-expanded="true"]>svg:last-child{transform:rotate(90deg)}
+.directory-group .thread{padding-left:18px}
+.app-shell:is(.collapsed,.rail) .directory-group .thread{padding-left:8px}
+.app-shell:is(.collapsed,.rail) .directory-group{margin-bottom:0}
+.context-label{font-size:11px;color:var(--text-3);white-space:nowrap}
 .native-shell .head-row{min-width:0}
 .back-chevron svg{transform:rotate(180deg)}
 .event-icon{color:var(--info)}

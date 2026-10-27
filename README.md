@@ -1,8 +1,10 @@
 # ChatGPT Codex Workspace for macOS
 
-这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的社区 macOS 移植 Fork，保留上游工具核心、历史和 MIT 署名。**当前源码：Mac 应用 1.6.0 · 上游核心 2.4.1 · 23 个公开 MCP 工具（另兼容 5 个旧名称）。** 非 OpenAI 官方应用，也不是原作者发布的 macOS 产品。
+[项目目录与构建入口](docs/PROJECT-LAYOUT.md) · 工作台按工作目录归组，对话单独列出。
 
-当前已发布安装包仍为 **1.4.1 / 核心 2.3.0**；使用 1.6.0 请按下方步骤从源码构建。
+这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的社区 macOS 移植 Fork，保留上游工具核心、历史和 MIT 署名。**当前源码：Mac 应用 1.6.1 · 上游核心 2.4.1 · 23 个公开 MCP 工具（另兼容 5 个旧名称）。** 非 OpenAI 官方应用，也不是原作者发布的 macOS 产品。
+
+当前已发布安装包仍为 **1.4.1 / 核心 2.3.0**；使用 1.6.1 请按下方步骤从源码构建。
 
 原生 SwiftUI 界面、内嵌实时工作台、菜单栏和 Dock 独立开关、关窗后台连接；原创暖白石墨图标。同步上游文件历史/撤销重做、命令去重、输出分页、持久计划和 Git 审阅功能。
 
@@ -17,18 +19,18 @@
 - 使用安装包**无需 Xcode、Node、Python 或 .NET**。执行 Git 等开发命令仍需要本机已有相应工具。
 - 安装位置：`/Applications/ChatGPT Codex Workspace.app`。Tunnel ID 和已有运行密钥在“连接与显示”中配置，API Key 保存在 macOS 钥匙串。
 - 安装包面向 **Apple Silicon、macOS 14 或更高版本**；尚不提供经过验证的 Intel 安装包。构建为 ad-hoc 签名，尚未 Developer ID 签名/公证；若首次打开被拦截，在确认来源后按 [首次打开说明](README.macos.md#首次打开与-macos-安全提示) 操作。
-- 1.4.1 的本地 28 工具、可靠性/重启恢复、协议与浏览器回归已有验证记录；1.6.0 的验证范围见 [macOS 使用说明](README.macos.md#已完成的验证)。真实 ChatGPT / 6 Pro 对话调用仍取决于宿主和账号支持，不把隧道就绪当作实际调用成功。
+- 1.4.1 的本地 28 工具、可靠性/重启恢复、协议与浏览器回归已有验证记录；1.6.1 的验证范围见 [macOS 使用说明](README.macos.md#已完成的验证)。真实 ChatGPT / 6 Pro 对话调用仍取决于宿主和账号支持，不把隧道就绪当作实际调用成功。
 
 完整连接、构建、验证与恢复范围见 **[macOS 使用说明](README.macos.md)**。
 
 ### 开发者：从源码构建
 
-使用当前 1.6.0 源码或参与开发时需要编译。需要 Xcode Command Line Tools / Swift 和 Node/npm；脚本管理项目内的 .NET SDK 与官方 Tunnel Client。
+使用当前 1.6.1 源码或参与开发时需要编译。需要 Xcode Command Line Tools / Swift 和 Node/npm；脚本管理项目内的 .NET SDK 与官方 Tunnel Client。
 
 ```sh
 git clone https://github.com/Ne1ther/chatgpt-local-workspace-macos.git
 cd chatgpt-local-workspace-macos
-./script/build_and_run.sh --install
+./scripts/build_and_run.sh --install
 ```
 
 ---
@@ -279,7 +281,7 @@ cd chatgpt-local-workspace-macos
 ## 从源码构建
 
 ```powershell
-./build.ps1                                  # 构建到 dist-next（含工作台页面与内嵌 WebView2 资源）
+./scripts/windows/build.ps1                                  # 构建到 dist-next（含工作台页面与内嵌 WebView2 资源）
 npm ci; npm run build:ui                     # 重建工作台页面
 node tests/mcp.test.cjs                      # 协议与工具
 node tests/patch.test.cjs                    # 补丁引擎
@@ -287,7 +289,7 @@ node tests/activity.test.cjs                 # 活动记录
 node tests/dashboard.test.cjs                # 工作台数据
 node --test tests/dashboard-ui.test.cjs      # 真实浏览器 UI 回归
 node --test tests/dashboard-media.test.cjs   # 实际 MCP 图片、状态和本地打开接口
-./build.ps1 -OutputDirectory ./dist         # 退出旧程序后直接构建到 dist
+./scripts/windows/build.ps1 -OutputDirectory ./dist         # 退出旧程序后直接构建到 dist
 ```
 
 `tests/dashboard-ui.test.cjs` 用真实浏览器跑 `src/dashboard.html`：检查时间线、检查器内容、计划卡片与筛选，在 1920/1366/640 三种宽度确认无横向溢出，浅深色下确认每类调用有独立主色。浏览器由 `scripts/browser-launch.cjs` 按 `$env:WORKSPACE_TEST_BROWSER` → 自带 Chromium → Chrome → Edge 顺序挑选。
@@ -300,7 +302,7 @@ node --test tests/dashboard-media.test.cjs   # 实际 MCP 图片、状态和本�
 
 ## 更新与替换
 
-`Apply-Update.ps1` 默认在程序运行时拒绝覆盖。显式加 `-StageWhileRunning` 可保留旧映像并准备下次启动的新版，不终止或重启进程；回滚备份会输出实际位置。先关闭应用（会结束其命令树），再运行更新脚本并从原 dist 启动。更新工具元数据后需在 ChatGPT 设置页刷新并**新开聊天**验证。
+`scripts/windows/Apply-Update.ps1` 默认在程序运行时拒绝覆盖。显式加 `-StageWhileRunning` 可保留旧映像并准备下次启动的新版，不终止或重启进程；回滚备份会输出实际位置。先关闭应用（会结束其命令树），再运行更新脚本并从原 dist 启动。更新工具元数据后需在 ChatGPT 设置页刷新并**新开聊天**验证。
 
 ## 常见问题
 

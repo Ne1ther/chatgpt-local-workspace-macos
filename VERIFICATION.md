@@ -1,5 +1,13 @@
 # macOS Fork 验证记录
 
+## macOS 1.6.1 · 2026-10-28
+
+- Swift Release、自包含后端、正式版与独立预览版构建通过；正式版已安装至 `/Applications/ChatGPT Codex Workspace.app`，版本 1.6.1、build 11，深度签名校验通过。
+- `npm test`：36 项，35 通过、1 项 Windows 专用测试跳过、0 失败。真实浏览器覆盖目录归组、同名目录区分、目录/对话搜索、折叠和选择，及既有暂停切换、窄屏、详情、计划和清理回归。原生分组模型以 Swift 编译执行验证。
+- 原生预览的本地检查成功建立隔离后端，工作台显示目录与对话；通过实际辅助功能操作进入对应工作台。界面截图仅用于本机复核，不上传用户目录或会话内容。
+- 正式覆盖安装前后，原有 6 个加密状态文件及原 Tunnel ID 校验值一致。Windows 构建脚本只完成路径适配，未在本机执行 Windows 构建。
+- 本轮优化减少重复状态解析与时间线派生计算；未进行 Instruments 性能采样，不声明 CPU、内存或帧率改善百分比。
+
 ## macOS 1.6.0 · 2026-10-21
 
 - Swift Release 与自包含后端构建通过，应用深度签名校验通过。正式应用已覆盖安装至 `/Applications/ChatGPT Codex Workspace.app`，版本 1.6.0、build 10，核心 2.4.1；启动进程来自安装路径，原生与后端可执行文件校验值均与本次构建一致。
@@ -27,7 +35,7 @@
 
 ## 2.3.0 · 2026-09-30
 
-- 最终源码使用系统 .NET Framework 编译到 `dist-next/LocalWorkspace.exe`，通过 `Apply-Update.ps1 -StageWhileRunning` 放入 `dist/LocalWorkspace.exe`。两个文件均为 1,705,984 字节，SHA256 均为 `768A48B055660B6D5B121B29CDD4D693D13C57F70C4195C447E4B2940B4E0EA4`。
+- 最终源码使用系统 .NET Framework 编译到 `dist-next/LocalWorkspace.exe`，通过 `scripts/windows/Apply-Update.ps1 -StageWhileRunning` 放入 `dist/LocalWorkspace.exe`。两个文件均为 1,705,984 字节，SHA256 均为 `768A48B055660B6D5B121B29CDD4D693D13C57F70C4195C447E4B2940B4E0EA4`。
 - 设置 `WORKSPACE_TEST_EXE` 指向正式 dist EXE 后运行完整 `npm test`：23 项通过、0 失败。实际 MCP 返回 2.3.0、28 个工具；legacy、modern、MRTR、长任务、文件与补丁、图片、附件契约和诊断回归通过。
 - 新增验证：同请求不重复执行；参数冲突拒绝；进程重启后的旧请求不重跑；字符分页、末尾读取与缓冲缺口；文件哈希冲突、预览不写入、精确匹配失败；单文件与整组撤销的外部修改保护；真实重启后对话、计划、证据与文件历史恢复；未确认完成的命令标为需核对。
 - 实际 Git 仓库夹具验证工作区/上次审阅基准、非忽略的新文件与外部编辑；正常 index 原始字节与 HEAD 均未变化。验证 Windows 凭据读写使用独立随机目标和合成 key，结束后删除该测试凭据，没有读取用户密钥。
@@ -93,7 +101,7 @@ Embedded multi-size assets/local-workspace.ico in EXE; editable SVG retained. Wi
 
 本节覆盖前面的版本、进程和待切换状态快照。
 
-- dist/LocalWorkspace.exe 与 dist-next/LocalWorkspace.exe 均为 209920 字节，SHA256 均为 B624EFDA7C561FC8F5AE354D8943C144584FEE18B504EF9533BCF69191923269。Apply-Update.ps1 在无运行实例条件下完成更新，没有终止或重启进程。
+- dist/LocalWorkspace.exe 与 dist-next/LocalWorkspace.exe 均为 209920 字节，SHA256 均为 B624EFDA7C561FC8F5AE354D8943C144584FEE18B504EF9533BCF69191923269。scripts/windows/Apply-Update.ps1 在无运行实例条件下完成更新，没有终止或重启进程。
 - tests/card.test.cjs：16/16 通过，新增直接与嵌套元数据恢复、标准握手失败状态保护、迟到图片结果及主题更新、旧 callTool 单次调用与嵌套回执测试。
 - tests/mcp.test.cjs：最终构建完整回归通过，核对 1.4.1、22 个工具、review-v5、两种 CSP 元数据和 review-v4 读取兼容，默认 Git Bash 与 PowerShell 等既有能力通过。
 - 隔离浏览器 tests/legacy-card-host.html 模拟仅 window.openai 可用、标准握手拒绝的宿主；实际看到恢复后的卡片与刷新结果。模拟工具数量为 3，不冒充真实 22 工具宿主。
@@ -105,7 +113,7 @@ Embedded multi-size assets/local-workspace.ico in EXE; editable SVG retained. Wi
 
 本节覆盖前面的版本、部署与待刷新状态快照。
 
-- 正式 dist 与 dist-next 的 LocalWorkspace.exe 均为 240128 字节，SHA256 为 81EC2741A2E7DF61127F473B5EAB21953DA54C816263A74CBCEDCDAF69D197B3。已完成编译、Apply-Update.ps1 替换和正式启动；更新前核对没有运行中的旧实例，未终止业务命令。原 Tunnel 配置与凭据保持不变。
+- 正式 dist 与 dist-next 的 LocalWorkspace.exe 均为 240128 字节，SHA256 为 81EC2741A2E7DF61127F473B5EAB21953DA54C816263A74CBCEDCDAF69D197B3。已完成编译、scripts/windows/Apply-Update.ps1 替换和正式启动；更新前核对没有运行中的旧实例，未终止业务命令。原 Tunnel 配置与凭据保持不变。
 - 新增 render_workspace 与 read_workspace_activity，共 24 个工具。仅 render_workspace 绑定 activity-v1.html；其余工具返回数据，避免每次调用都创建结果卡片。旧 review-v4/v5 资源保留兼容。
 - tests/mcp.test.cjs、tests/patch.test.cjs、tests/activity.test.cjs 全部通过；tests/card.test.cjs 21/21 通过。最后一次活动测试：命令同步等待 3352 ms 时，独立活动读取耗时 6 ms；覆盖运行中状态、命令输出不消耗增量、12 路读取、文件操作顺序、目录范围、计划、失败及展示诊断。
 - 并发读取改造曾暴露 Git 子进程继承协议 stdin 导致超时，已改为独立 stdin 并立即关闭；完整 Git 回归通过。
@@ -157,8 +165,8 @@ Embedded multi-size assets/local-workspace.ico in EXE; editable SVG retained. Wi
 - 修复：写成 `.event.k-read` 双类选择器，与规则顺序无关；只改 CSS，未动 JSX 与数据。
 - 证据：修前实时页面 `--tone` 只有 1 种、图标色 3 种（选中白、失败红、其余灰）；修后 8 种主色、10 种图标色，命令青、读取蓝、写入紫、搜索青蓝、目录灰蓝、Git 靛、计划琥珀、信息灰。
 - 测试缺口：原断言“至少四种颜色”在同一种灰上照样通过——刚点过的行颜色仍在 .13s 过渡里，取到的是 oklab 插值。现改为按 k- 类读 `--tone`，要求“类型数 = 主色数”，并保留运行中/失败行数断言；修前该用例 not ok 4，修后 tests/dashboard-ui.test.cjs 10/10 通过，tests/dashboard.test.cjs 与 tests/card.test.cjs 21/21 通过。
-- 产物：`node scripts/build-dashboard.cjs` 重建 src/dashboard.html（484800 字节，SHA256 8F9CF74A0AF487A9534C1FEFB73F6A4B7B0AF6EA445D514F5B8B344C32EDF549），`./build.ps1` 重编 dist-next（LocalWorkspace.exe 760320 字节，SHA256 0CA9E0184BBD56D0565AB6CDCEAB5FA46B6C166093E2CF14FE71F2698A001D9A）。
-- 边界：正式 dist 与运行中的 GUI 4068、MCP 34728 未动，仍在跑没有此修复的页面；切换版本需用户执行 Apply-Update.ps1。本轮只在样例快照的真实浏览器里复核（样例页 127.0.0.1:3203，1600x900 及 1920/1366/640 无横向溢出），未在真实 ChatGPT 或桌面客户端验收。
+- 产物：`node scripts/build-dashboard.cjs` 重建 src/dashboard.html（484800 字节，SHA256 8F9CF74A0AF487A9534C1FEFB73F6A4B7B0AF6EA445D514F5B8B344C32EDF549），`./scripts/windows/build.ps1` 重编 dist-next（LocalWorkspace.exe 760320 字节，SHA256 0CA9E0184BBD56D0565AB6CDCEAB5FA46B6C166093E2CF14FE71F2698A001D9A）。
+- 边界：正式 dist 与运行中的 GUI 4068、MCP 34728 未动，仍在跑没有此修复的页面；切换版本需用户执行 scripts/windows/Apply-Update.ps1。本轮只在样例快照的真实浏览器里复核（样例页 127.0.0.1:3203，1600x900 及 1920/1366/640 无横向溢出），未在真实 ChatGPT 或桌面客户端验收。
 
 ## 浏览器自动选择与视觉验收补齐（2026-09-16 19:05）
 
@@ -178,12 +186,12 @@ Embedded multi-size assets/local-workspace.ico in EXE; editable SVG retained. Wi
 - 读取详情改为展示正文：服务端先用控制字符比例判定是不是文本（src/WorkspaceDetail.cs 的 LooksBinary），是文本就带行号展开，最多 10 KB，超出时提示“内容超过 10 KB，这里只展开了一部分”；不是文本（如 local-workspace.ico）只显示“不是文本”与文件大小并说明未展开；文件路径只留在卡片标题和悬浮提示里，不单独占一行。
 - 复核（19:12–19:15，样例页 http://127.0.0.1:3203/）：点击 WorkspaceDetail.cs 读取显示第 96–117 行正文，点击 local-workspace.ico 显示“不是文本”且无正文；npm test 36/36 通过（16.3 s）。
 - 产物：src/dashboard.html 484800 字节，SHA256 8F9CF74A0AF487A9534C1FEFB73F6A4B7B0AF6EA445D514F5B8B344C32EDF549；dist-next/LocalWorkspace.exe 760320 字节，SHA256 0CA9E0184BBD56D0565AB6CDCEAB5FA46B6C166093E2CF14FE71F2698A001D9A。编译只用系统 .NET Framework 自带的 csc（4.8.9221.0），不依赖 Visual Studio 的 Roslyn。
-- 边界：正式 dist/LocalWorkspace.exe 仍是 16:53 的 1.6.0 构建（278528 字节），未替换；当前没有 LocalWorkspace 或 tunnel 进程在运行，Apply-Update.ps1 -CheckOnly 返回 Ready to update，升级由用户自行执行。本节只在样例快照复核，未在真实 ChatGPT 会话里验收。
+- 边界：正式 dist/LocalWorkspace.exe 仍是 16:53 的 1.6.0 构建（278528 字节），未替换；当前没有 LocalWorkspace 或 tunnel 进程在运行，scripts/windows/Apply-Update.ps1 -CheckOnly 返回 Ready to update，升级由用户自行执行。本节只在样例快照复核，未在真实 ChatGPT 会话里验收。
 ## 检查器占满高度与正式 dist 升级（2026-09-16 19:24）
 
 - 需求：右侧检查器尽量占满可用高度，超出部分在内部滚动，不要让内容把整块面板顶下去。
 - 改法：`#detail-body` 改为纵向 flex；承载当前调用的卡片加 `fill`（`flex:1 1 auto;min-height:0;display:flex;flex-direction:column`），卡片内只有正文区域加 `region`（`flex:1 1 auto;min-height:0;max-height:none;overflow:auto`），卡片头、命令提示行与状态行保持原高。原先正文区固定的 46/48/52/56vh 上限只在 fill 卡片里解除，其它场景不变。计划步骤是 grid，补 `align-content:start`，否则行会被拉开成整屏。
 - 覆盖：命令输出、读取正文、写入差异、Git 差异、搜索命中、目录条目、计划步骤都随高度伸缩；文件信息这类只有几行键值的卡片保持内容高度。没有正文的读取（非文本、未找到文件）不撑高，避免出现空壳大卡片。
 - 复核（样例页 http://127.0.0.1:3203/，1023×805 窗口，检查器内容高 637）：命令、计划、Git 差异、目录卡片 603 高，正文区 513–563 高且 clientHeight 等于 scrollHeight（内容不足时留白、不出滚动条）；搜索卡片 574 高（多一行说明）；计划 5 个步骤行各 26px，不再被拉开；写入差异与文本读取在内容多时撑到卡片底部并在区内滚动。npm test 36/36 通过（16.8 s）。
-- 产物与升级：src/dashboard.html 485366 字节，SHA256 7880453FCA7AD0662821D04F1395A112AC9A0AA08AACFF4C85E3D02E9BE24DB4；dist-next/LocalWorkspace.exe 760832 字节，SHA256 8BDC57E54325715B3FD1D3C285E29E82606DE418DFAED868A6EB6F274A81D998。按用户要求执行 `Apply-Update.ps1`，正式 dist 与 dist-next 的 EXE 与 dashboard.html 哈希一致；升级时没有 LocalWorkspace 或 tunnel 进程在运行。
+- 产物与升级：src/dashboard.html 485366 字节，SHA256 7880453FCA7AD0662821D04F1395A112AC9A0AA08AACFF4C85E3D02E9BE24DB4；dist-next/LocalWorkspace.exe 760832 字节，SHA256 8BDC57E54325715B3FD1D3C285E29E82606DE418DFAED868A6EB6F274A81D998。按用户要求执行 `scripts/windows/Apply-Update.ps1`，正式 dist 与 dist-next 的 EXE 与 dashboard.html 哈希一致；升级时没有 LocalWorkspace 或 tunnel 进程在运行。
 - 边界：本轮只在样例快照与静态回归里复核，未在真实 ChatGPT 会话或新启动的 dist 实例里验收；dist 换新构建后需重新启动 dist/LocalWorkspace.exe 并刷新插件元数据。

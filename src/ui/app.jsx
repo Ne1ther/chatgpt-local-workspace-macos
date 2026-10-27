@@ -146,7 +146,8 @@ export function App() {
     return () => { window.removeEventListener('resize', onResize); window.removeEventListener('hashchange', onHash); window.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('workspace-visibility', onNativeVisible); window.removeEventListener('workspace-setup', onSetup); clearTimeout(copiedRef.current); clearTimeout(noticeRef.current); clearTimeout(flashRef.current); };
   }, []);
 
-  const rows = useMemo(() => (snapshot ? buildRows(snapshot, now) : []), [snapshot, now]);
+  // Clock ticks update live labels without rebuilding/filtering the entire activity model.
+  const rows = useMemo(() => (snapshot ? buildRows(snapshot, Date.now()) : []), [snapshot]);
   const visible = useMemo(() => filterRows(rows, query.trim().toLowerCase(), state), [rows, query, state]);
   const counts = useMemo(() => countStates(rows), [rows]);
   const hasRunning = counts.running > 0;
@@ -198,7 +199,7 @@ export function App() {
   useLayoutEffect(() => { if (bottomRef.current) toBottom(); }, [visible.length, thread, query, state, !!snapshot]);
 
   const current = metadata ? (metadata.conversations || []).find(row => row.thread_id === thread) : null;
-  const title = current ? current.title || '未命名对话' : (thread === 'unassigned' ? '未归属' : '全部对话');
+  const title = current ? current.title || '未命名对话' : (thread === 'unassigned' ? '未归属操作' : '全部操作');
   const startedAt = current ? createdAt(current) ?? (rows[0] && rows[0].start) : (rows[0] && rows[0].start) || undefined;
   const lastAt = (stats[thread] || {}).lastAt;
   const connection = paused ? '已暂停' : error ? '已断开' : snapshot ? '实时' : '连接中';

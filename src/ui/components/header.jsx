@@ -39,7 +39,7 @@ export function Header({
         {/* The sidebar toggle sits here in every state, so the sidebar never spends a row on it. */}
         {sidebarRail ? null : <IconButton id="collapse" label={sidebarCollapsed ? '展开侧栏' : '收起侧栏'} icon="panelLeft" className="head-sidebar"
           aria-expanded={!sidebarCollapsed} onClick={onSidebar} />}
-        {onBack ? <IconButton label="返回全部对话" icon="chevronRight" className="back-chevron" onClick={onBack} /> : null}
+        {onBack ? <IconButton label="返回工作台" icon="chevronRight" className="back-chevron" onClick={onBack} /> : null}
         <div className="head-title">
           <h1 id="title" title={title}>{title}</h1>
           {source ? <span id="source" className="source-chip">{source}</span> : null}
@@ -69,7 +69,7 @@ export function Header({
         </div>
       </div>
       <div className="head-meta">
-        {context ? <span id="context" className="context" title={context}><Icon name="folder" size={13} /><PathLink value={context} /></span> : null}
+        {context ? <span id="context" className="context" title={context}><Icon name="folder" size={13} /><span className="context-label">工作目录</span><PathLink value={context} /></span> : null}
         {facts}
         <span className="head-stats">
           {calls ? <span className="stat tabular" id="metric-calls"><b>{calls}</b> 次调用</span> : null}

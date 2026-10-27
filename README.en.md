@@ -1,8 +1,8 @@
 # macOS community fork
 
-This fork adds a native macOS app (**current source: Mac 1.6.0 / upstream core 2.4.1, 23 public tools plus 5 legacy aliases**). See [macOS setup and build instructions](README.macos.md). Original Windows documentation and MIT attribution are preserved below. This is not an official OpenAI application.
+This fork adds a native macOS app (**current source: Mac 1.6.1 / upstream core 2.4.1, 23 public tools plus 5 legacy aliases**). See [macOS setup and build instructions](README.macos.md). Original Windows documentation and MIT attribution are preserved below. This is not an official OpenAI application.
 
-The current published package remains **1.4.1 / core 2.3.0**; build from source to use 1.6.0.
+The current published package remains **1.4.1 / core 2.3.0**; build from source to use 1.6.1.
 
 ## Download for macOS — no build required
 
@@ -14,7 +14,7 @@ The package is for **Apple Silicon (M-series), macOS 14 or later**. It includes 
 
 This community build is ad-hoc signed, **not Developer ID signed or notarized**. If macOS blocks the first launch, check the download source and follow [Apple's Open Anyway instructions](https://support.apple.com/en-us/102445). Do not disable Gatekeeper. For updates, explicitly quit the old app and replace it with the new download; preferences and Keychain credentials remain separate from the app bundle.
 
-To use the current 1.6.0 source or contribute to development, see [the build section](README.macos.md#从源码构建).
+To use the current 1.6.1 source or contribute to development, see [the build section](README.macos.md#从源码构建).
 
 ---
 
@@ -249,7 +249,7 @@ Old running instances only have the embedded page: observe them read-only via `n
 ## Build from source
 
 ```powershell
-./build.ps1                                  # builds into dist-next
+./scripts/windows/build.ps1                                  # builds into dist-next
 npm ci; npm run build:ui                     # rebuild the dashboard page
 node tests/mcp.test.cjs                      # protocol & tools
 node tests/patch.test.cjs                    # patch engine
@@ -268,7 +268,7 @@ Verification records: [VERIFICATION.md](VERIFICATION.md). Upgrade notes: [UPGRAD
 
 ## Updating
 
-`Apply-Update.ps1` refuses to overwrite while the app or tunnel is running and never kills processes automatically. Close the app first (this ends its command tree), run the update script, then relaunch from the same dist. After tool metadata changes, refresh in ChatGPT settings and **start a new chat** to verify.
+`scripts/windows/Apply-Update.ps1` refuses to overwrite while the app or tunnel is running and never kills processes automatically. Close the app first (this ends its command tree), run the update script, then relaunch from the same dist. After tool metadata changes, refresh in ChatGPT settings and **start a new chat** to verify.
 
 ## Troubleshooting
 

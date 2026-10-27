@@ -10,7 +10,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
       --source) [[ $# -ge 2 ]] || exit 2; SOURCE="$2"; shift 2 ;;
       --destination) [[ $# -ge 2 ]] || exit 2; DESTINATION="$2"; shift 2 ;;
-      *) echo 'Usage: script/install_macos.sh [--source app-path] [--destination directory]' >&2; exit 2 ;;
+      *) echo 'Usage: scripts/install_macos.sh [--source app-path] [--destination directory]' >&2; exit 2 ;;
     esac
 done
 

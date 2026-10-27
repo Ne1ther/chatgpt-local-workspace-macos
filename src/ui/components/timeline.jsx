@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { cn } from 'cn';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,7 +111,7 @@ function onRowKeys(event, onSelect) {
 
 // The activity stream: oldest at the top, newest at the bottom, grouped into turns.
 export function Timeline({ rows, visible, expanded, selectedId, flashId, inspector, onToggle, onSelect, now, snapshot, filtered, onSetup, onReset }) {
-  const groups = groupTurns(visible);
+  const groups = useMemo(() => groupTurns(visible), [visible]);
   return (
     <section id="timeline" className="timeline" aria-label="调用时间线" onKeyDown={event => onRowKeys(event, onSelect)}>
       {groups.map(group => (

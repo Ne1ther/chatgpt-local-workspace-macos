@@ -4,7 +4,7 @@ import Observation
 
 @MainActor @Observable
 final class WorkspaceStore {
-    var destination: Destination? = .overview
+    var destination: Destination? = .workbench
     var selectedThreadID = ""
     var showsAllActivity = false
     var state: ConnectionState = .stopped
@@ -422,6 +422,7 @@ final class WorkspaceStore {
         let expected = generation
         monitor = Task {
             var tick = 0
+            var previousData: Data?
             while !Task.isCancelled && generation == expected {
                 if let url = dashboardURL {
                     var request = URLRequest(url: url.appendingPathComponent("api/native-status")); request.timeoutInterval = 2
@@ -429,17 +430,23 @@ final class WorkspaceStore {
                         let (data, response) = try await URLSession.shared.data(for: request)
                         guard generation == expected else { return }
                         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw WorkspaceError(message: "状态读取失败") }
-                        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
-                        let snapshot = try decoder.decode(DashboardSnapshot.self, from: data)
-                        activeCommandCount = snapshot.commands?.filter(\.running).count ?? 0
-                        latestBackendActivityIDs = Set(snapshot.activity.map(\.id))
-                        hiddenActivityIDs.formIntersection(latestBackendActivityIDs)
-                        mergeActivity(snapshot.activity)
-                        var known = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
-                        for conversation in snapshot.conversations { known[conversation.id] = conversation }
-                        let next = known.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-                        if conversations != next { conversations = next }
-                        if let version = snapshot.version, !version.isEmpty { coreVersion = String(version.prefix(32)) }
+                        if data != previousData {
+                            let snapshot = try await Task.detached(priority: .utility) {
+                                let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+                                return try decoder.decode(DashboardSnapshot.self, from: data)
+                            }.value
+                            guard generation == expected, !Task.isCancelled else { return }
+                            activeCommandCount = snapshot.commands?.filter(\.running).count ?? 0
+                            latestBackendActivityIDs = Set(snapshot.activity.map(\.id))
+                            hiddenActivityIDs.formIntersection(latestBackendActivityIDs)
+                            mergeActivity(snapshot.activity)
+                            var known = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+                            for conversation in snapshot.conversations { known[conversation.id] = conversation }
+                            let next = known.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+                            if conversations != next { conversations = next }
+                            if let version = snapshot.version, !version.isEmpty { coreVersion = String(version.prefix(32)) }
+                            previousData = data
+                        }
                         snapshotStale = false
                     } catch { if generation == expected { snapshotStale = true } }
                 }

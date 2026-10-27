@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { clean } = require('../script/clean_macos.cjs');
+const { clean } = require('../scripts/clean_macos.cjs');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-workspace-cleanup-test-'));
@@ -12,7 +12,7 @@ function fixture(t) {
   const files = {
     'package.json': JSON.stringify({ name: 'local-workspace-dashboard' }),
     'macos/backend/WorkspaceBackend.csproj': 'project',
-    'script/build_and_run.sh': 'build',
+    'scripts/build_and_run.sh': 'build',
     '.tools/dotnet/dotnet': 'sdk',
     'node_modules/react/index.js': 'module',
     'macos/.build/release/app': 'build',
