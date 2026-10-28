@@ -39,12 +39,23 @@ int main(int argc,char **argv) {
   volatile int build=BUILD; if(build<0)return 9;
   SecKeychainRef kc=NULL; SecKeychainSetUserInteractionAllowed(false);
   if(argc!=3||SecKeychainOpen(argv[1],&kc))return 3;
+  CFMutableDictionaryRef query=CFDictionaryCreateMutable(NULL,0,&kCFTypeDictionaryKeyCallBacks,&kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(query,kSecClass,kSecClassGenericPassword);
+  CFDictionarySetValue(query,kSecAttrService,CFSTR("workspace-test"));
+  CFDictionarySetValue(query,kSecAttrAccount,CFSTR("a"));
   OSStatus status;
-  if(!strcmp(argv[2],"write"))status=SecKeychainAddGenericPassword(kc,14,"workspace-test",1,"a",7,"fixture",NULL);
-  else { UInt32 size=0;void *data=NULL;status=SecKeychainFindGenericPassword(kc,14,"workspace-test",1,"a",&size,&data,NULL);
-    if(!status&&(size!=7||memcmp(data,"fixture",7)))return 4;
-    if(data)SecKeychainItemFreeContent(NULL,data);
+  if(!strcmp(argv[2],"write")) {
+    CFDictionarySetValue(query,kSecUseKeychain,kc);
+    CFDataRef value=CFDataCreate(NULL,(const UInt8 *)"fixture",7);
+    CFDictionarySetValue(query,kSecValueData,value);status=SecItemAdd(query,NULL);CFRelease(value);
+  } else {
+    const void *items[]={kc};CFArrayRef search=CFArrayCreate(NULL,items,1,&kCFTypeArrayCallBacks);
+    CFDictionarySetValue(query,kSecMatchSearchList,search);CFDictionarySetValue(query,kSecReturnData,kCFBooleanTrue);
+    CFTypeRef data=NULL;status=SecItemCopyMatching(query,&data);
+    if(!status&&(CFDataGetLength(data)!=7||memcmp(CFDataGetBytePtr(data),"fixture",7)))return 4;
+    if(data)CFRelease(data);CFRelease(search);
   }
+  CFRelease(query);
   CFRelease(kc);return status==errSecSuccess?0:2;
 }`);
   const versions = ['v1', 'v2', 'unrelated'].map(name => path.join(dir, name));
@@ -57,6 +68,54 @@ int main(int argc,char **argv) {
   run(versions[0], [keychain, 'write']);
   run(versions[1], [keychain, 'read']);
   assert.equal(spawnSync(versions[2], [keychain, 'read'], { timeout: 5000 }).status, 2, 'another signer must not inherit access');
+
+  // Use one fixed read-only helper while replacing the GUI caller with new builds.
+  const app = path.join(dir, 'Review.app'), helper = path.join(app, 'Contents/Helpers/workspace-credentials'), parent = path.join(app, 'Contents/MacOS/LocalWorkspace');
+  fs.mkdirSync(path.dirname(helper), { recursive: true }); fs.mkdirSync(path.dirname(parent), { recursive: true });
+  const helperArgs = ['-O2', '-mmacosx-version-min=14.0', `-DWORKSPACE_CERT_SHA1="${identity}"`, `-DWORKSPACE_TEST_KEYCHAIN="${keychain}"`, path.resolve('macos/credential_helper.c'), '-framework', 'Security', '-framework', 'CoreFoundation'];
+  const sign = (exe, id, hardened = true, signer = identity) => run('/usr/bin/codesign', ['--force', '--timestamp=none', '--sign', signer, '--keychain', keychain, ...(hardened ? ['--options', 'runtime'] : []), '--identifier', id, exe]);
+  run('/usr/bin/xcrun', ['clang', ...helperArgs, '-o', helper]); sign(helper, 'community.localworkspace.mac.credentials');
+  const writer = path.join(dir, 'writer.c'), writerExe = path.join(dir, 'writer');
+  fs.writeFileSync(writer, `#include <Security/Security.h>
+int main(int argc,char **argv) {
+ SecKeychainRef kc=NULL;SecTrustedApplicationRef app=NULL;SecAccessRef access=NULL;
+ if(argc!=3||SecKeychainOpen(argv[1],&kc)||SecTrustedApplicationCreateFromPath(argv[2],&app))return 1;
+ const void *items[]={app};CFArrayRef apps=CFArrayCreate(NULL,items,1,&kCFTypeArrayCallBacks);
+ if(SecAccessCreate(CFSTR("Workspace helper fixture"),apps,&access))return 2;
+ CFMutableDictionaryRef q=CFDictionaryCreateMutable(NULL,0,&kCFTypeDictionaryKeyCallBacks,&kCFTypeDictionaryValueCallBacks);
+ CFDictionarySetValue(q,kSecClass,kSecClassGenericPassword);CFDictionarySetValue(q,kSecUseKeychain,kc);
+ CFDictionarySetValue(q,kSecAttrService,CFSTR("workspace-helper-test"));CFDictionarySetValue(q,kSecAttrAccount,CFSTR("tunnel-api-key"));
+ CFDataRef data=CFDataCreate(NULL,(const UInt8 *)"fixture",7);CFDictionarySetValue(q,kSecValueData,data);CFDictionarySetValue(q,kSecAttrAccess,access);
+ return SecItemAdd(q,NULL)==0?0:3;
+}`);
+  run('/usr/bin/xcrun', ['clang', writer, '-framework', 'Security', '-framework', 'CoreFoundation', '-o', writerExe]);
+  run(writerExe, [keychain, helper]);
+  const caller = path.join(dir, 'caller.c');
+  fs.writeFileSync(caller, `#include <unistd.h>
+#include <sys/wait.h>
+int main(int argc,char **argv){volatile int build=BUILD;if(build<0||argc!=2)return 9;pid_t pid=fork();if(pid==0){execl(argv[1],argv[1],"read","noninteractive",NULL);_exit(8);}int status=0;if(pid<0||waitpid(pid,&status,0)<0)return 7;return WIFEXITED(status)?WEXITSTATUS(status):6;}`);
+  const compileCaller = (build, hardened = true, signer = identity) => {
+    run('/usr/bin/xcrun', ['clang', '-DBUILD=' + build, caller, '-o', parent]);
+    sign(parent, 'community.localworkspace.mac', hardened, signer);
+  };
+  compileCaller(1);
+  assert.equal(run(parent, [helper]).toString(), '0\nfixture');
+  const oldCaller = fs.readFileSync(parent);
+  compileCaller(2);
+  assert.notDeepEqual(fs.readFileSync(parent), oldCaller);
+  assert.equal(run(parent, [helper]).toString(), '0\nfixture', 'a changed authenticated GUI uses the same helper without authorization');
+  assert.equal(run(helper, ['read', 'noninteractive']).toString(), '-25293\n', 'direct callers cannot retrieve a secret');
+  compileCaller(3, false);
+  assert.equal(run(parent, [helper]).toString(), '-25293\n', 'an injectable caller is rejected');
+  compileCaller(4, true, '-');
+  assert.equal(run(parent, [helper]).toString(), '-25293\n', 'a caller signed by a different identity is rejected');
+  const rebuiltHelper = path.join(dir, 'another-stage/workspace-credentials');
+  fs.mkdirSync(path.dirname(rebuiltHelper)); run('/usr/bin/xcrun', ['clang', ...helperArgs, '-o', rebuiltHelper]); sign(rebuiltHelper, 'community.localworkspace.mac.credentials');
+  const cdhash = exe => {
+    const result = spawnSync('/usr/bin/codesign', ['-d', '--verbose=4', exe], { encoding: 'utf8' });
+    return result.stderr.match(/^CDHash=(\w+)$/m)?.[1];
+  };
+  assert(cdhash(helper)); assert.equal(cdhash(helper), cdhash(rebuiltHelper), 'helper identity stays identical in another build directory');
 });
 
 test('connection credential cache avoids repeat reads, keeps source isolation and retries explicit failures', { skip: !mac, timeout: 60000 }, t => {
