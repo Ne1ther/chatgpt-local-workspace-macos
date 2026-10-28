@@ -46,8 +46,32 @@ precondition(groups[0].conversations.map(\\.id) == ["b", "a"])
 precondition(groups[0].latestActivity["a"]?.id == "old")
 precondition(groups[0].title == groups[1].title && groups[0].id != groups[1].id)
 precondition(groups[2].path == nil)
+let recorded = try! JSONDecoder().decode(Conversation.self, from: Data(#"{"threadId":"thread-123456abcdef","title":"project","path":"/work/project","source":"chatgpt","createdAt":"2026-10-24T03:46:51.6752190Z","stats":{"calls":4,"lastAt":"2026-10-24T04:00:00Z"}}"#.utf8))
+precondition(recorded.sourceLabel == "ChatGPT")
+precondition(recorded.createdLabel != nil && recorded.shortCode == "ABCDEF")
+precondition(recorded.displayTitle(among: [recorded]) != "project")
+let repeated = (0..<7).map { index in Conversation(threadId: "thread-session-" + String(index), title: "project", path: "/work/project") }
+let history = WorkspaceDirectory.grouped(repeated, activity: [])[0]
+precondition(history.visibleConversations(expanded: false, selected: "").count == 3)
+precondition(history.visibleConversations(expanded: true, selected: "").count == 7)
+let older = history.conversations.last!.id
+precondition(history.visibleConversations(expanded: false, selected: older).contains { $0.id == older })
+precondition(Set(history.conversations.map(\\.identityLine)).count == 7)
 print("native directory grouping passed")
 `);
   execFileSync('swiftc', [path.resolve('macos/Sources/LocalWorkspace/Models/WorkspaceModels.swift'), main, '-o', executable], { timeout: 60000, stdio: 'pipe' });
   assert.match(execFileSync(executable, { encoding: 'utf8' }), /grouping passed/);
+});
+
+test('same-name host sessions get distinct labels, preserve identity and sort by recency', async () => {
+  const { groupDirectories, conversationLabel, conversationIdentity } = await import('../src/ui/lib/directories.js');
+  const rows = Array.from({ length: 7 }, (_, index) => ({ thread_id: 'thread-session-' + index, title: 'project', path: '/work/project', source: 'chatgpt', created_at: `2026-10-${String(10 + index).padStart(2, '0')}T03:00:00Z` }));
+  const group = groupDirectories(rows)[0];
+  assert.equal(group.conversations.length, 7);
+  assert.equal(group.conversations[0].thread_id, 'thread-session-6');
+  assert.equal(new Set(rows.map(row => conversationLabel(row, rows))).size, 7);
+  assert.equal(new Set(rows.map(conversationIdentity)).size, 7);
+  assert(rows.every(row => conversationLabel(row, rows).startsWith('ChatGPT · ')));
+  assert.equal(groupDirectories(rows, 'SION-3')[0].conversations[0].thread_id, 'thread-session-3');
+  assert.equal(rows[0].title, 'project', 'presentation must not rewrite recorded titles');
 });

@@ -74,7 +74,38 @@ struct Conversation: Decodable, Identifiable, Equatable, Sendable {
     let threadId: String
     let title: String
     let path: String?
+    var source: String? = nil
+    var createdAt: String? = nil
+    var stats: ConversationStatistics? = nil
     var id: String { threadId }
+    var sourceLabel: String { source == "codex" ? "Codex" : source == "chatgpt" ? "ChatGPT" : "本地会话" }
+    var shortCode: String { String(threadId.replacingOccurrences(of: "thread-", with: "").suffix(6)).uppercased() }
+    var recency: String { stats?.lastAt ?? createdAt ?? "" }
+    private static let timestamp = ISO8601DateFormatter()
+    private static let fractionalTimestamp: ISO8601DateFormatter = {
+        let value = ISO8601DateFormatter(); value.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return value
+    }()
+    private static let displayDate: DateFormatter = {
+        let value = DateFormatter(); value.locale = Locale(identifier: "zh_CN"); value.dateFormat = "MM/dd HH:mm"; return value
+    }()
+    var createdLabel: String? {
+        guard let createdAt, let date = Self.fractionalTimestamp.date(from: createdAt) ?? Self.timestamp.date(from: createdAt) else { return nil }
+        return Self.displayDate.string(from: date)
+    }
+    func displayTitle(among peers: [Conversation]) -> String {
+        let directory = path.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.lastPathComponent }
+        let ambiguous = title == directory || title == "ChatGPT 对话" || title.isEmpty || peers.filter { $0.title == title }.count > 1
+        return ambiguous ? sourceLabel + " · " + (createdLabel ?? "#" + shortCode) : title
+    }
+    var identityLine: String { "#" + shortCode + " · " + sourceLabel + (createdLabel.map { " · " + $0 } ?? "") }
+    var sidebarSummary: String { "#" + shortCode + " · " + (stats?.calls.map { "\($0) 次操作" } ?? sourceLabel) }
+}
+
+struct ConversationStatistics: Decodable, Equatable, Sendable {
+    let calls: Int?
+    let running: Int?
+    let failed: Int?
+    let lastAt: String?
 }
 
 /// A directory can host several conversations. Grouping is presentation-only:
@@ -86,7 +117,13 @@ struct WorkspaceDirectory: Identifiable {
     let latestActivity: [String: ActivityEntry]
     var title: String { path.map { URL(fileURLWithPath: $0).lastPathComponent.isEmpty ? $0 : URL(fileURLWithPath: $0).lastPathComponent } ?? "未设置目录" }
     var displayPath: String { path.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "登记对话时可关联本地文件夹" }
-    var lastActivity: String { latestActivity.values.map(\.startedAt).max() ?? "" }
+    var lastActivity: String { (latestActivity.values.map(\.startedAt) + conversations.map(\.recency)).max() ?? "" }
+    func visibleConversations(expanded: Bool, selected: String) -> [Conversation] {
+        if expanded { return conversations }
+        var rows = Array(conversations.prefix(3))
+        if !rows.contains(where: { $0.id == selected }), let chosen = conversations.first(where: { $0.id == selected }) { rows.append(chosen) }
+        return rows
+    }
 
     static func grouped(_ conversations: [Conversation], activity: [ActivityEntry]) -> [WorkspaceDirectory] {
         var latest: [String: ActivityEntry] = [:]
@@ -98,8 +135,9 @@ struct WorkspaceDirectory: Identifiable {
         }
         return buckets.map { key, values in
             let rows = values.sorted {
-                let left = latest[$0.id]?.startedAt ?? "", right = latest[$1.id]?.startedAt ?? ""
-                return left == right ? $0.title.localizedStandardCompare($1.title) == .orderedAscending : left > right
+                let left = latest[$0.id]?.startedAt ?? $0.recency, right = latest[$1.id]?.startedAt ?? $1.recency
+                if left != right { return left > right }
+                return $0.title == $1.title ? $0.id < $1.id : $0.title.localizedStandardCompare($1.title) == .orderedAscending
             }
             return WorkspaceDirectory(id: key, path: key.isEmpty ? nil : key, conversations: rows,
                                       latestActivity: latest.filter { item in values.contains { $0.id == item.key } })

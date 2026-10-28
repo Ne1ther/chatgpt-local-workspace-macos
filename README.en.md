@@ -1,8 +1,8 @@
 # macOS community fork
 
-This fork adds a native macOS app (**current source: Mac 1.6.1 / upstream core 2.4.1, 23 public tools plus 5 legacy aliases**). See [macOS setup and build instructions](README.macos.md). Original Windows documentation and MIT attribution are preserved below. This is not an official OpenAI application.
+This fork adds a native macOS app (**current source: Mac 1.6.2 / upstream core 2.4.1, 23 public tools plus 5 legacy aliases**). See [macOS setup and build instructions](README.macos.md). Original Windows documentation and MIT attribution are preserved below. This is not an official OpenAI application.
 
-The current published package remains **1.4.1 / core 2.3.0**; build from source to use 1.6.1.
+The current published package remains **1.4.1 / core 2.3.0**; build from source to use 1.6.2.
 
 ## Download for macOS — no build required
 
@@ -14,7 +14,7 @@ The package is for **Apple Silicon (M-series), macOS 14 or later**. It includes 
 
 This community build is ad-hoc signed, **not Developer ID signed or notarized**. If macOS blocks the first launch, check the download source and follow [Apple's Open Anyway instructions](https://support.apple.com/en-us/102445). Do not disable Gatekeeper. For updates, explicitly quit the old app and replace it with the new download; preferences and Keychain credentials remain separate from the app bundle.
 
-To use the current 1.6.1 source or contribute to development, see [the build section](README.macos.md#从源码构建).
+To use the current 1.6.2 source or contribute to development, see [the build section](README.macos.md#从源码构建).
 
 ---
 

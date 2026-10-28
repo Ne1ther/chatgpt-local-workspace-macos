@@ -2,9 +2,9 @@
 
 [项目目录与构建入口](docs/PROJECT-LAYOUT.md) · 工作台按工作目录归组，对话单独列出。
 
-这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的社区 macOS 移植 Fork，保留上游工具核心、历史和 MIT 署名。**当前源码：Mac 应用 1.6.1 · 上游核心 2.4.1 · 23 个公开 MCP 工具（另兼容 5 个旧名称）。** 非 OpenAI 官方应用，也不是原作者发布的 macOS 产品。
+这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的社区 macOS 移植 Fork，保留上游工具核心、历史和 MIT 署名。**当前源码：Mac 应用 1.6.2 · 上游核心 2.4.1 · 23 个公开 MCP 工具（另兼容 5 个旧名称）。** 非 OpenAI 官方应用，也不是原作者发布的 macOS 产品。
 
-当前已发布安装包仍为 **1.4.1 / 核心 2.3.0**；使用 1.6.1 请按下方步骤从源码构建。
+当前已发布安装包仍为 **1.4.1 / 核心 2.3.0**；使用 1.6.2 请按下方步骤从源码构建。
 
 原生 SwiftUI 界面、内嵌实时工作台、菜单栏和 Dock 独立开关、关窗后台连接；原创暖白石墨图标。同步上游文件历史/撤销重做、命令去重、输出分页、持久计划和 Git 审阅功能。
 
@@ -19,13 +19,13 @@
 - 使用安装包**无需 Xcode、Node、Python 或 .NET**。执行 Git 等开发命令仍需要本机已有相应工具。
 - 安装位置：`/Applications/ChatGPT Codex Workspace.app`。Tunnel ID 和已有运行密钥在“连接与显示”中配置，API Key 保存在 macOS 钥匙串。
 - 安装包面向 **Apple Silicon、macOS 14 或更高版本**；尚不提供经过验证的 Intel 安装包。构建为 ad-hoc 签名，尚未 Developer ID 签名/公证；若首次打开被拦截，在确认来源后按 [首次打开说明](README.macos.md#首次打开与-macos-安全提示) 操作。
-- 1.4.1 的本地 28 工具、可靠性/重启恢复、协议与浏览器回归已有验证记录；1.6.1 的验证范围见 [macOS 使用说明](README.macos.md#已完成的验证)。真实 ChatGPT / 6 Pro 对话调用仍取决于宿主和账号支持，不把隧道就绪当作实际调用成功。
+- 1.4.1 的本地 28 工具、可靠性/重启恢复、协议与浏览器回归已有验证记录；1.6.2 的验证范围见 [macOS 使用说明](README.macos.md#已完成的验证)。真实 ChatGPT / 6 Pro 对话调用仍取决于宿主和账号支持，不把隧道就绪当作实际调用成功。
 
 完整连接、构建、验证与恢复范围见 **[macOS 使用说明](README.macos.md)**。
 
 ### 开发者：从源码构建
 
-使用当前 1.6.1 源码或参与开发时需要编译。需要 Xcode Command Line Tools / Swift 和 Node/npm；脚本管理项目内的 .NET SDK 与官方 Tunnel Client。
+使用当前 1.6.2 源码或参与开发时需要编译。需要 Xcode Command Line Tools / Swift 和 Node/npm；脚本管理项目内的 .NET SDK 与官方 Tunnel Client。
 
 ```sh
 git clone https://github.com/Ne1ther/chatgpt-local-workspace-macos.git
@@ -260,7 +260,7 @@ cd chatgpt-local-workspace-macos
 - 活动保留全局最近 100 条、最多 200 个线程；2.3.0 起与计划一起加密保存。旧命令未确认结束时，重启后明确提示核对，不自动重跑。
 - 桌面程序的**操作记录**页签是同一活动流的表格视图（时间 / 线程 / 操作 / 内容），**原始日志**页签保留隧道与 MCP 的完整原始输出，均按级别着色、支持尾随跟随与行复制。
 
-页面实现：静态资源在 `src/ui/`（React 组件与中文标签）、`src/dashboard.css`（Tailwind 4）、`src/dashboard.template.html`（模板）。`npm ci && npm run build:ui` 先用 Tailwind CLI 编译样式，再用 esbuild 打包组件，全部内联进单个 `src/dashboard.html`——没有 CDN、没有模块加载器、运行时不需要 Node。新构建优先读取程序同目录的 `dashboard.html`，缺失时回退嵌入页面。
+页面实现：静态资源在 `src/ui/`（React 组件与中文标签）、`src/dashboard.css`（Tailwind 4）、`src/dashboard.template.html`（模板）。`npm ci && npm run build:ui` 先用 Tailwind CLI 编译样式，再用 esbuild 打包组件，全部内联进单个 `src/dashboard.html`——没有 CDN、没有模块加载器、运行时不需要 Node。macOS 读取随应用安装的 `dashboard.html`；Windows 优先读取同目录页面，缺失时回退嵌入页面。本机开发可[配置稳定签名](docs/LOCAL-SIGNING.md)，减少更新后重复授权。
 
 旧实例热更新限制：运行中的旧程序只有嵌入页面，可用 `node scripts/dashboard-preview.cjs http://127.0.0.1:<原端口>/` 只读观察，加 `--sample` 用内置样例预览界面。此入口不重启应用、不执行工具。
 

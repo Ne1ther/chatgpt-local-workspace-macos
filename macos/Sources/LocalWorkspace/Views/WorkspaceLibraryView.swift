@@ -9,7 +9,7 @@ struct WorkspaceLibraryView: View {
     private var directories: [WorkspaceDirectory] {
         WorkspaceDirectory.grouped(store.conversations, activity: store.activity).compactMap { directory in
             let matchesDirectory = query.isEmpty || directory.displayPath.localizedStandardContains(query) || directory.title.localizedStandardContains(query)
-            let rows = matchesDirectory ? directory.conversations : directory.conversations.filter { $0.title.localizedStandardContains(query) }
+            let rows = matchesDirectory ? directory.conversations : directory.conversations.filter { ($0.title + " " + $0.identityLine).localizedStandardContains(query) }
             return rows.isEmpty ? nil : WorkspaceDirectory(id: directory.id, path: directory.path, conversations: rows, latestActivity: directory.latestActivity)
         }
     }
@@ -25,7 +25,7 @@ struct WorkspaceLibraryView: View {
                     }
                     Spacer()
                     Button { store.registerConversation() } label: { Label("登记对话", systemImage: "plus") }
-                        .buttonStyle(.borderedProminent).disabled(store.dashboardURL == nil)
+                        .buttonStyle(.borderedProminent).tint(WorkspacePalette.button).disabled(store.dashboardURL == nil)
                 }
                 HStack(spacing: 14) {
                     TextField("搜索目录或对话", text: $query)
@@ -52,7 +52,7 @@ struct WorkspaceLibraryView: View {
                     if !store.running {
                         Button("连接 ChatGPT", systemImage: "link") {
                             if store.canConnect { store.connect() } else { openSettings() }
-                        }.buttonStyle(.borderedProminent).disabled(store.busy)
+                        }.buttonStyle(.borderedProminent).tint(WorkspacePalette.button).disabled(store.busy)
                         Button("运行本地检查", systemImage: "checkmark.shield") { store.runLocalCheck() }.disabled(store.busy)
                     }
                 }
@@ -68,7 +68,7 @@ struct WorkspaceLibraryView: View {
                 }
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(WorkspacePalette.page)
     }
 
     private func directorySection(_ directory: WorkspaceDirectory) -> some View {
@@ -90,30 +90,34 @@ struct WorkspaceLibraryView: View {
                         Label("在访达中打开", systemImage: "arrow.up.forward.square").labelStyle(.iconOnly)
                     }.buttonStyle(.plain).foregroundStyle(.secondary).help("在访达中打开工作目录")
                 }
-            }.padding(18)
-            Divider().padding(.horizontal, 18)
+            }.padding(18).background(WorkspacePalette.raised)
             ForEach(directory.conversations) { conversation in
                 Button { store.selectConversation(conversation.id) } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "bubble.left").foregroundStyle(.secondary).frame(width: 22)
-                        Text(conversation.title).font(.callout.weight(.medium)).lineLimit(1)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(conversation.displayTitle(among: directory.conversations)).font(.callout.weight(.medium)).lineLimit(1)
+                                .foregroundStyle(WorkspacePalette.text)
+                            Text(conversation.identityLine).font(.caption).foregroundStyle(WorkspacePalette.secondaryText).lineLimit(1)
+                        }
                         Spacer(minLength: 12)
                         if let entry = directory.latestActivity[conversation.id] {
                             Text(entry.displayTool).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             Text(entry.statusLabel).font(.caption)
                                 .foregroundStyle(entry.status == "failed" ? Color.orange : entry.status == "running" ? Color.blue : Color.secondary)
-                            Text(entry.localTime).font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+                            Text(entry.localTime).font(.caption.monospacedDigit()).foregroundStyle(WorkspacePalette.secondaryText)
                         } else {
-                            Text("暂无操作").font(.caption).foregroundStyle(.tertiary)
+                            Text("暂无操作").font(.caption).foregroundStyle(WorkspacePalette.secondaryText)
                         }
-                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(WorkspacePalette.secondaryText)
                     }
                     .padding(.horizontal, 18).padding(.vertical, 14).contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).accessibilityLabel("打开对话：\(conversation.title)")
+                .buttonStyle(.plain).accessibilityLabel("打开会话：\(conversation.displayTitle(among: directory.conversations))，\(conversation.shortCode)")
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color(nsColor: .separatorColor).opacity(0.6)))
+        .background(WorkspacePalette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(WorkspacePalette.border))
     }
 }

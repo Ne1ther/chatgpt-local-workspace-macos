@@ -67,11 +67,7 @@ if [[ ! -f macos/Resources/AppIcon.icns || ! -f macos/Resources/AppIcon.png || !
     swift scripts/generate_icons.swift "$ROOT_DIR"
 fi
 cp macos/Resources/AppIcon.icns macos/Resources/AppIcon.png macos/Resources/MenuBarIconTemplate*.png "$STAGED_APP/Contents/Resources/"
-for binary in "$STAGED_APP/Contents/Resources/Backend/"*.dylib "$STAGED_APP/Contents/Resources/Backend/workspace-server" "$STAGED_APP/Contents/Resources/Backend/workspace-launcher" "$STAGED_APP/Contents/Resources/Backend/tunnel-client"; do
-    codesign --force --sign - "$binary" 2>/dev/null
-done
-codesign --force --sign - "$STAGED_APP"
-codesign --verify --deep --strict "$STAGED_APP"
+./scripts/sign_macos.sh "$STAGED_APP"
 mkdir -p "$ROOT_DIR/dist-macos"
 ./scripts/install_macos.sh --source "$STAGED_APP" --destination "$ROOT_DIR/dist-macos"
 case "$MODE" in

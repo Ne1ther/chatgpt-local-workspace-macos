@@ -5,8 +5,10 @@ struct ContentView: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var sidebarVisible = true
     @State private var collapsedDirectories = Set<String>()
+    @State private var expandedConversationGroups = Set<String>()
 
     private enum SidebarSelection: Hashable {
         case page(Destination), conversation(String)
@@ -29,7 +31,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 List(selection: selection) {
                     ForEach(Destination.allCases) { item in
-                        Label { Text(item.rawValue).foregroundStyle(pageSelected(item) ? Color.white : .primary) } icon: {
+                        Label { Text(item.rawValue).foregroundStyle(selectionColor(pageSelected(item))) } icon: {
                             sidebarSymbol(item.symbol, color: item == .overview ? .indigo : item == .workbench ? .blue : item == .activity ? .purple : .secondary,
                                           selected: pageSelected(item))
                         }
@@ -38,6 +40,7 @@ struct ContentView: View {
                 }
                 .listStyle(.sidebar)
                 .scrollDisabled(true)
+                .scrollContentBackground(.hidden)
                 .frame(height: 194)
                 Divider().padding(.horizontal, 16)
                 // Project scrolling never displaces the fixed primary navigation.
@@ -47,15 +50,27 @@ struct ContentView: View {
                             DisclosureGroup(isExpanded: Binding(get: { !collapsedDirectories.contains(directory.id) }, set: { value in
                                 if value { collapsedDirectories.remove(directory.id) } else { collapsedDirectories.insert(directory.id) }
                             })) {
-                            ForEach(directory.conversations) { conversation in
+                            ForEach(directory.visibleConversations(expanded: expandedConversationGroups.contains(directory.id), selected: store.selectedThreadID)) { conversation in
                             Label {
-                                Text(conversation.title).lineLimit(1)
-                                    .foregroundStyle(store.destination == .workbench && store.selectedThreadID == conversation.id ? Color.white : .primary)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(conversation.displayTitle(among: directory.conversations)).lineLimit(1)
+                                        .foregroundStyle(selectionColor(store.destination == .workbench && store.selectedThreadID == conversation.id))
+                                    Text(conversation.sidebarSummary).font(.system(size: 10.5)).lineLimit(1)
+                                        .foregroundStyle(store.destination == .workbench && store.selectedThreadID == conversation.id && controlActiveState != .inactive ? Color.white.opacity(0.9) : WorkspacePalette.secondaryText)
+                                }
                             } icon: {
                                 sidebarSymbol("bubble.left", color: .secondary, selected: store.destination == .workbench && store.selectedThreadID == conversation.id)
                             }
-                            .help(conversation.title)
+                            .help(conversation.title + "\n" + conversation.identityLine)
                             .tag(SidebarSelection.conversation(conversation.id))
+                            }
+                            if directory.conversations.count > 3 && (expandedConversationGroups.contains(directory.id) || directory.visibleConversations(expanded: false, selected: store.selectedThreadID).count < directory.conversations.count) {
+                                Button(expandedConversationGroups.contains(directory.id) ? "收起较早会话" : "显示其余 \(directory.conversations.count - directory.visibleConversations(expanded: false, selected: store.selectedThreadID).count) 个会话") {
+                                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                                    if expandedConversationGroups.contains(directory.id) { expandedConversationGroups.remove(directory.id) }
+                                    else { expandedConversationGroups.insert(directory.id) }
+                                    }
+                                }.buttonStyle(.plain).font(.caption).foregroundStyle(WorkspacePalette.blue)
                             }
                             } label: {
                                 Label {
@@ -67,11 +82,12 @@ struct ContentView: View {
                                 .help(directory.displayPath)
                             }
                         }
-                        Label { Text("未归属操作").foregroundStyle(store.destination == .workbench && store.selectedThreadID == "unassigned" ? Color.white : .primary) } icon: { sidebarSymbol("tray.fill", color: .orange, selected: store.destination == .workbench && store.selectedThreadID == "unassigned") }
+                        Label { Text("未归属操作").foregroundStyle(selectionColor(store.destination == .workbench && store.selectedThreadID == "unassigned")) } icon: { sidebarSymbol("tray.fill", color: .orange, selected: store.destination == .workbench && store.selectedThreadID == "unassigned") }
                             .tag(SidebarSelection.conversation("unassigned"))
                     }
                 }
                 .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
                 .font(.system(size: 13))
                 .tint(.accentColor)
                 Divider()
@@ -94,7 +110,7 @@ struct ContentView: View {
                 .padding(18)
             }
             .frame(width: 256)
-            .background(.regularMaterial)
+            .background(WorkspacePalette.sidebar)
             .transition(.move(edge: .leading).combined(with: .opacity))
             }
             VStack(spacing: 0) {
@@ -102,6 +118,7 @@ struct ContentView: View {
                 destinationView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .background(WorkspacePalette.page)
             .navigationTitle((store.destination ?? .overview).rawValue)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -151,6 +168,7 @@ struct ContentView: View {
                 }
             }
         }
+        .tint(WorkspacePalette.blue)
         .onChange(of: scenePhase) {
             store.dashboardSession.setVisible(scenePhase == .active && store.destination == .workbench && (!store.selectedThreadID.isEmpty || store.showsAllActivity))
         }
@@ -162,12 +180,15 @@ struct ContentView: View {
     private func pageSelected(_ page: Destination) -> Bool {
         store.destination == page && (page != .workbench || store.selectedThreadID.isEmpty)
     }
+    private func selectionColor(_ selected: Bool) -> Color {
+        selected && controlActiveState != .inactive ? .white : WorkspacePalette.text
+    }
     private func sidebarSymbol(_ name: String, color: Color, selected: Bool = false) -> some View {
         Image(systemName: name)
             .resizable()
             .scaledToFit()
             .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(selected ? .white : color)
+            .foregroundStyle(selected && controlActiveState != .inactive ? .white : color)
             .frame(width: 18, height: 18)
             .frame(width: 20, height: 20)
     }
@@ -244,9 +265,11 @@ struct StatusLabel: View {
             } else {
                 Circle().fill(color).frame(width: 7, height: 7)
             }
-            Text(state.label).font(.callout).lineLimit(1)
+            Text(state.label).font(.callout.weight(.medium)).lineLimit(1).contentTransition(.opacity)
         }
         .fixedSize()
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(color.opacity(0.14), in: Capsule())
         .accessibilityElement(children: .combine)
     }
     private var color: Color {

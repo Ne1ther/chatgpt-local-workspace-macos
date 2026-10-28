@@ -13,7 +13,7 @@ struct WorkspaceHomeView: View {
                     VStack(alignment: .leading, spacing: 7) {
                         Text("本地工作区")
                             .font(.system(size: 25, weight: .semibold))
-                        Text(statusDescription).font(.callout).foregroundStyle(.secondary)
+                        Text(statusDescription).font(.callout).foregroundStyle(WorkspacePalette.secondaryText)
                     }
                     Spacer(minLength: 8)
                     StatusLabel(state: store.state).font(.callout)
@@ -21,7 +21,7 @@ struct WorkspaceHomeView: View {
                 WorkspaceFlowView(store: store).padding(.vertical, 12)
                 HStack(spacing: 12) {
                     Button(primaryTitle, systemImage: store.running ? "rectangle.3.group" : "link", action: primaryAction)
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.borderedProminent).tint(WorkspacePalette.button)
                         .disabled(store.busy)
                     Button("本地能力与权限", systemImage: "folder.badge.gearshape") { store.destination = .access }
                     Spacer()
@@ -31,7 +31,6 @@ struct WorkspaceHomeView: View {
                     }
                 }.controlSize(.large)
                 WorkspaceAdviceView(store: store)
-                Divider()
                 VStack(alignment: .leading, spacing: 15) {
                     HStack {
                         Text(store.activeWorkCount > 0 ? "正在进行" : "最近操作").font(.headline)
@@ -48,7 +47,7 @@ struct WorkspaceHomeView: View {
                                     Text(entry.statusLabel).font(.caption).foregroundStyle(.secondary)
                                 }
                                 Text(entry.target).font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(.secondary).lineLimit(2).textSelection(.enabled)
+                                    .foregroundStyle(WorkspacePalette.secondaryText).lineLimit(2).textSelection(.enabled)
                             }
                         }.padding(.vertical, 10)
                     } else {
@@ -56,13 +55,17 @@ struct WorkspaceHomeView: View {
                             .font(.callout).foregroundStyle(.secondary).padding(.vertical, 12)
                     }
                 }
+                .padding(22)
+                .background(WorkspacePalette.surface, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(WorkspacePalette.border))
                 HStack {
                     Label("本地执行 · 加密保存", systemImage: "lock.shield"); Spacer()
                     Text("核心 \(store.coreVersion) · \(WorkspaceCore.toolCount) 个工具").monospacedDigit()
-                }.font(.callout).foregroundStyle(.secondary)
+                }.font(.callout).foregroundStyle(WorkspacePalette.secondaryText)
             }
             .padding(36).frame(maxWidth: 920, alignment: .leading).frame(maxWidth: .infinity)
         }
+        .background(WorkspacePalette.page)
     }
     private var primaryTitle: String { store.busy ? (store.state == .local ? "正在检查" : store.state == .starting ? "正在连接" : "正在保存") : store.running ? "查看工作台" : store.canConnect ? "连接 ChatGPT" : "设置连接" }
     private func primaryAction() {

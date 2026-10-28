@@ -44,7 +44,7 @@ struct ConnectionSettings: View {
                     Button("保存") { store.saveSettings() }
                         .disabled(store.running || store.busy)
                     Button("保存并连接", systemImage: "link") { store.connect() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.borderedProminent).tint(WorkspacePalette.button)
                         .disabled(!store.canConnect || store.running || store.busy)
                         .keyboardShortcut(.defaultAction)
                 }

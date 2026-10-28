@@ -19,7 +19,7 @@ struct ActivityView: View {
                 Picker("对话", selection: $thread) {
                     Text("全部对话").tag("")
                     Text("未归属").tag("unassigned")
-                    ForEach(store.conversations) { Text($0.title).tag($0.id) }
+                    ForEach(store.conversations) { Text($0.displayTitle(among: store.conversations) + " · " + $0.shortCode).tag($0.id) }
                 }
                 .frame(maxWidth: 260)
                 Spacer(minLength: 8)
@@ -56,7 +56,7 @@ struct ActivityView: View {
             } else {
                 Table(rows, selection: $selection) {
                     TableColumn("时间") {
-                        Text($0.localTime).monospacedDigit().foregroundStyle(.secondary)
+                        Text($0.localTime).monospacedDigit().foregroundStyle(WorkspacePalette.secondaryText)
                     }.width(82)
                     TableColumn("工具") {
                         Text($0.tool).lineLimit(1).help($0.tool)
@@ -66,12 +66,16 @@ struct ActivityView: View {
                     }
                     TableColumn("状态") { row in
                         Text(row.statusLabel)
-                            .foregroundStyle(row.status == "failed" ? Color.orange : Color.secondary)
+                            .foregroundStyle(row.status == "failed" ? WorkspacePalette.orange : WorkspacePalette.secondaryText)
                     }.width(64)
                     TableColumn("耗时") {
-                        Text("\($0.elapsedMs) ms").monospacedDigit().foregroundStyle(.secondary)
+                        Text("\($0.elapsedMs) ms").monospacedDigit().foregroundStyle(WorkspacePalette.secondaryText)
                     }.width(82)
                 }
+                .scrollContentBackground(.hidden)
+                .alternatingRowBackgrounds(.disabled)
+                .foregroundStyle(WorkspacePalette.text)
+                .background(WorkspacePalette.surface)
                 .contextMenu(forSelectionType: String.self) { ids in
                     Button("复制记录", systemImage: "doc.on.doc") {
                         store.copy(rows.filter { ids.contains($0.id) }.map(\.copyText).joined(separator: "\n"))
@@ -90,6 +94,7 @@ struct ActivityView: View {
                 }
             }
         }
+        .background(WorkspacePalette.page)
         .searchable(text: $search, prompt: "搜索工具或路径")
     }
 

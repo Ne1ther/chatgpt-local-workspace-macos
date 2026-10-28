@@ -235,7 +235,7 @@ test('dashboard', { timeout: 180000 }, async t => {
       assert.equal(await page.locator('.detail-column').count(), 0);
     });
 
-    await t.test('界面克制且跟随浅深色，加载图标之外没有循环动效', async () => {
+    await t.test('彩色组件区分操作类型，浅深色正文清晰且减少动态效果可用', async () => {
       await page.mouse.move(0, 0);
       await delay(250); // let the 120 ms hover/selection transitions settle
       const report = await page.evaluate(() => {
@@ -268,18 +268,44 @@ test('dashboard', { timeout: 180000 }, async t => {
       assert.deepEqual(report.edges, [], '不允许 2px 以上的侧边线或侧边阴影条');
       assert.equal(report.rowColors.length, 1, '各类调用的文字同一种颜色，不再按类型着色：' + report.rowColors.join(' | '));
       assert.equal(report.rowBackgrounds.length, 1, '各类调用的行底色一致：' + report.rowBackgrounds.join(' | '));
-      assert.equal(report.iconColors.length, 1, '行首图标同一种灰色：' + report.iconColors.join(' | '));
+      assert(report.iconColors.length >= 3, '读写、命令等操作用不同的语义色图标：' + report.iconColors.join(' | '));
       assert.deepEqual(report.shadows, [], '阴影只用于浮层（菜单、提示、对话框、窄窗口抽屉）');
       assert.equal(await page.locator('#timeline .event .event-icon svg').count(), rowCount, '每行都有动作图标（运行中为加载图标）');
       // 选中与当前对话都只用底色，不用侧边线。
       assert.equal(await page.locator('#threads .thread.active').evaluate(node => getComputedStyle(node).boxShadow), 'none');
 
       const lightSurface = await page.locator(".main-sheet").evaluate(node => getComputedStyle(node).backgroundColor);
+      const luminance = color => {
+        const { r, g, b } = parseColor(color);
+        const channel = value => { value /= 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4; };
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+      };
+      for (const mode of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: mode });
+        const colors = await page.evaluate(() => {
+          const root = getComputedStyle(document.documentElement);
+          const probe = document.createElement('span'); document.body.append(probe);
+          const colors = Object.fromEntries(['--text', '--text-2', '--text-3', '--surface', '--frame', '--header'].map(key => {
+            probe.style.color = root.getPropertyValue(key).trim();
+            return [key, getComputedStyle(probe).color];
+          }));
+          probe.remove(); return colors;
+        });
+        for (const token of ['--text', '--text-2', '--text-3']) {
+          const a = luminance(colors[token]), b = luminance(colors['--surface']);
+          assert((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= 4.5, `${mode}: ${token} contrast must be at least 4.5:1`);
+        }
+        assert.notEqual(colors['--frame'], colors['--surface'], '导航与内容区需要不同底色');
+        assert.notEqual(colors['--header'], colors['--surface'], '标题栏与正文需要不同底色');
+      }
       // macOS follows the system appearance.
       await page.emulateMedia({ colorScheme: 'dark' });
       await delay(100);
       assert.notEqual(await page.locator('.main-sheet').evaluate(node => getComputedStyle(node).backgroundColor), lightSurface);
       await page.emulateMedia({ colorScheme: 'light' });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      assert.equal(await page.locator('.event-wrap').first().evaluate(node => getComputedStyle(node).animationName), 'none');
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
     });
 
     await t.test('侧栏用底色标记当前对话，折叠后只留下图标', async () => {
@@ -364,6 +390,37 @@ test('dashboard', { timeout: 180000 }, async t => {
         if (process.env.WORKSPACE_UI_QA_DIR) {
           const fs = require('node:fs'); fs.mkdirSync(process.env.WORKSPACE_UI_QA_DIR, { recursive: true });
           await other.screenshot({ path: path.join(process.env.WORKSPACE_UI_QA_DIR, '03-workbench-directories.png'), fullPage: true });
+        }
+      } finally { await other.close(); }
+    });
+
+    await t.test('同名宿主会话显示日期和编号，默认收起较早记录且可搜索', async () => {
+      const other = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+      const sample = require('../scripts/sample-snapshot.cjs')();
+      sample.conversations = Array.from({ length: 7 }, (_, index) => ({ thread_id: 'thread-collision-' + index, title: 'workspace', path: '/Projects/workspace', source: 'chatgpt', created_at: `2026-10-${String(10 + index).padStart(2, '0')}T03:00:00Z` }));
+      await other.route('**/api/snapshot*', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify(sample) }));
+      try {
+        await other.goto(preview.url);
+        await other.waitForSelector('.directory-group .thread');
+        const items = other.locator('.directory-group .thread');
+        assert.equal(await items.count(), 3);
+        assert.equal(new Set(await items.locator('b').allTextContents()).size, 3);
+        assert((await items.locator('.thread-sub').allTextContents()).every(text => text.startsWith('#') && text.includes('ChatGPT')));
+        await other.getByRole('button', { name: '显示其余 4 个会话' }).click();
+        assert.equal(await items.count(), 7);
+        await other.getByRole('textbox', { name: '搜索目录或对话' }).fill('SION-1');
+        assert.equal(await items.count(), 1);
+        await items.first().click();
+        await other.waitForFunction(() => location.hash === '#thread=thread-collision-1');
+        await other.getByRole('textbox', { name: '搜索目录或对话' }).fill('');
+        await other.getByRole('button', { name: '收起较早会话' }).click();
+        assert.equal(await items.count(), 4, '保留当前选中的较早会话，避免选择消失');
+        assert.equal(await other.locator('.directory-group .thread.active').count(), 1);
+        if (process.env.WORKSPACE_UI_QA_DIR) {
+          await other.emulateMedia({ colorScheme: 'dark' });
+          await other.screenshot({ path: path.join(process.env.WORKSPACE_UI_QA_DIR, 'workbench-color-dark.png'), fullPage: true });
+          await other.emulateMedia({ colorScheme: 'light' });
+          await other.screenshot({ path: path.join(process.env.WORKSPACE_UI_QA_DIR, 'workbench-color-light.png'), fullPage: true });
         }
       } finally { await other.close(); }
     });

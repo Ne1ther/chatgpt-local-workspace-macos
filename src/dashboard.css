@@ -1,10 +1,10 @@
 /* Local workspace dashboard — a three-pane desktop tool (sidebar | timeline | inspector)
-   in neutral grays. Tailwind CSS v4 supplies the shadcn/ui theme bridge and a few
+   with native neutral surfaces and semantic accent colors. Tailwind CSS v4 supplies the shadcn/ui theme bridge and a few
    utilities; every component recipe lives below.
-   Rules kept on purpose: no accent bars on any edge, no gradients, no hue-tinted chrome,
-   no pulsing or sweeping animation (the only infinite motion is the loading spinner),
+   Color distinguishes surfaces and operation types. Motion follows state changes;
+   the only infinite animation is the real loading spinner.
    shadows only on things that float (menus, tooltips, dialogs, the narrow-window drawer),
-   fixed light scheme until a dark palette is designed.
+   Light and dark palettes share native macOS tokens.
    Spacing follows a 4px grid; type scale 16 / 14 / 13 / 12. */
 @import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css" source(none);
@@ -561,3 +561,44 @@ html[data-visible="false"] *,html[data-visible="false"] *::before,html[data-visi
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 /* A failed local operation includes its concrete recovery step. */
 .recovery-hint { margin: 8px 0 0; line-height: 1.55; }
+
+/* More distinct surfaces, readable secondary text, and useful colored components. */
+:root{
+--frame:#ededed;--surface:#ffffff;--subtle:#f7f7f7;--muted:#f2f2f2;--block:#f2f2f2;--popover:#ffffff;--header:#f7f7f7;
+--text:#202020;--text-body:#202020;--text-2:#5c5c5c;--text-3:#5c5c5c;--text-4:#656565;--placeholder:#656565;
+--line:#d7d7d7;--line-soft:#e5e5e5;--line-strong:#aaaaaa;--hover:#f2f2f2;--selected:#e5e5e5;--rail-hover:#e4e4e4;--rail-selected:#e5e5e5;
+--primary:#245fc0;--primary-hover:#1d50a7;--info:#245fc0;--ring:#245fc0;--violet:#7052bd;--teal:#087b74;--orange:#975100;
+--ok:#087b74;--warn:#975100;--danger:#b6293d;--chip:#eeeeee;--background:#ffffff;--foreground:#202020;
+}
+@media(prefers-color-scheme:dark){:root{
+--frame:#252525;--surface:#1e1e1e;--subtle:#303030;--muted:#303030;--block:#242424;--popover:#303030;--header:#292929;
+--text:#f5f5f5;--text-body:#f5f5f5;--text-2:#c2c2c2;--text-3:#c2c2c2;--text-4:#b8b8b8;--placeholder:#b8b8b8;
+--line:#4a4a4a;--line-soft:#3b3b3b;--line-strong:#686868;--hover:#303030;--selected:#3b3b3b;--rail-hover:#353535;--rail-selected:#3b3b3b;
+--primary:#2864c7;--primary-hover:#3272dc;--info:#8abfff;--ring:#8abfff;--violet:#cab2ff;--teal:#6cdbc5;--orange:#f7bc6a;
+--ok:#6cdbc5;--warn:#f7bc6a;--danger:#ff969e;--chip:#303030;--background:#1e1e1e;--foreground:#f5f5f5;
+}}
+.workspace-head{background:var(--header);border-bottom:1px solid var(--line)}
+.directory-toggle>svg:first-child{color:var(--info)}
+.directory-label>span{font-size:11px;line-height:16px}
+.thread-glyph{color:var(--violet)}
+.thread.two-line{transition:background-color .16s ease,transform .16s ease}
+.thread.two-line:hover{transform:translateX(2px)}
+.thread-sub{color:var(--text-2)}
+.conversation-more{display:block;margin:4px 8px 8px 32px;color:var(--info);font-size:12px;line-height:26px;text-align:left}
+.conversation-more:hover{text-decoration:underline}
+.directory-group .thread{animation:conversation-enter .16s ease-out}
+.detail-head{background:var(--header)}
+.code-block{border-color:var(--line)}
+.code-head{background:var(--subtle)}
+.event.k-write:not(.failed):not(.selected) .event-icon{color:var(--violet)}
+.event.k-command:not(.failed):not(.selected) .event-icon{color:var(--teal)}
+.event.k-search:not(.failed):not(.selected) .event-icon,.event.k-directory:not(.failed):not(.selected) .event-icon{color:var(--orange)}
+.event.live .event-icon,.stat.live,.stat.live b{color:var(--teal)}
+.event.selected{background:var(--selected)}
+.event{transition:background-color .16s ease}
+.event-wrap{animation:conversation-enter .16s ease-out}
+.connection{padding:3px 7px;border-radius:6px;background:var(--ok-soft)}
+.connection.error{background:var(--danger-soft)}
+.plan-mark,.step-index.done{color:var(--teal)}
+@keyframes conversation-enter{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.thread.two-line:hover{transform:none}.directory-group .thread,.event-wrap{animation:none}}

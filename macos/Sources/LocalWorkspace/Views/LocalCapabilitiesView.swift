@@ -117,7 +117,7 @@ struct WorkspaceAdviceView: View {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(item.title).font(.callout.weight(.medium))
-                            Text(item.detail).font(.callout).foregroundStyle(.secondary)
+                            Text(item.detail).font(.callout).foregroundStyle(WorkspacePalette.secondaryText)
                                 .lineLimit(3).textSelection(.enabled)
                         }.frame(maxWidth: .infinity, alignment: .leading)
                         Button(item.actionLabel) {
@@ -133,6 +133,9 @@ struct WorkspaceAdviceView: View {
                     }
                 }
             }
+            .padding(20)
+            .background(WorkspacePalette.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(WorkspacePalette.orange.opacity(0.45)))
         }
     }
 }

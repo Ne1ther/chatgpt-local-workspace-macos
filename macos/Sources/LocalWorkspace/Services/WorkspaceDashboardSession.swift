@@ -115,6 +115,7 @@ final class WorkspaceDashboardSession: NSObject, WKNavigationDelegate {
     private static func themeScript(for appearance: NSAppearance) -> String {
         var tokens: [String: String] = [:]
         appearance.performAsCurrentDrawingAppearance {
+            let palette = WorkspacePalette.nsColor
             let colors: [String: NSColor] = [
                 "--frame": .windowBackgroundColor, "--surface": .controlBackgroundColor,
                 "--subtle": .underPageBackgroundColor, "--block": .textBackgroundColor, "--popover": .controlBackgroundColor,
@@ -133,7 +134,23 @@ final class WorkspaceDashboardSession: NSObject, WKNavigationDelegate {
                 "--border": .separatorColor, "--input": .separatorColor, "--ring": .controlAccentColor,
                 "--success": .systemGreen, "--warning": .systemOrange, "--destructive": .systemRed,
             ]
-            for (key, color) in colors {
+            let themed: [String: NSColor] = [
+                "--frame": palette("sidebar"), "--surface": palette("surface"), "--subtle": palette("raised"),
+                "--block": palette("page"), "--popover": palette("raised"), "--text": palette("text"),
+                "--text-body": palette("text"), "--text-2": palette("secondary"), "--text-3": palette("secondary"),
+                "--text-4": palette("secondary"), "--placeholder": palette("secondary"), "--hover": palette("raised"),
+                "--selected": palette("selection"), "--rail-hover": palette("raised"), "--rail-selected": palette("selection"),
+                "--line": palette("border"), "--line-soft": palette("border"), "--line-strong": palette("border"),
+                "--ok": palette("teal"), "--warn": palette("orange"), "--danger": palette("danger"), "--info": palette("blue"),
+                "--primary": palette("button"), "--primary-hover": palette("button"), "--background": palette("surface"),
+                "--foreground": palette("text"), "--card": palette("raised"), "--card-foreground": palette("text"),
+                "--muted": palette("raised"), "--muted-foreground": palette("secondary"), "--secondary": palette("raised"),
+                "--secondary-foreground": palette("text"), "--accent": palette("selection"), "--accent-foreground": palette("text"),
+                "--border": palette("border"), "--input": palette("border"), "--ring": palette("blue"),
+                "--success": palette("teal"), "--warning": palette("orange"), "--destructive": palette("danger"),
+                "--violet": palette("violet"), "--teal": palette("teal"), "--orange": palette("orange"), "--header": palette("raised"),
+            ]
+            for (key, color) in colors.merging(themed, uniquingKeysWith: { _, custom in custom }) {
                 guard let rgb = color.usingColorSpace(.sRGB) else { continue }
                 let components = [rgb.redComponent, rgb.greenComponent, rgb.blueComponent, rgb.alphaComponent].map { max(0, min(255, Int(($0 * 255).rounded()))) }
                 tokens[key] = String(format: "#%02x%02x%02x%02x", components[0], components[1], components[2], components[3])

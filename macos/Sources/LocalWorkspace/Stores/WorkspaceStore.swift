@@ -30,6 +30,7 @@ final class WorkspaceStore {
     var operationMessage = ""
     @ObservationIgnored private let credentialRead: @Sendable (Bool) throws -> String?
     @ObservationIgnored private let credentialSave: @Sendable (String) throws -> Void
+    @ObservationIgnored private let credentialCache = ConnectionCredentialCache()
     var issue: String?
     var dashboardURL: URL?
     var dashboardRevision = UUID()
@@ -135,8 +136,7 @@ final class WorkspaceStore {
         var resolved = supplied
         if supplied.isEmpty && credentialAccessDeferred && resolveCredential {
             operationMessage = "正在读取运行密钥；如有钥匙串提示，请确认本应用。"
-            let reader = credentialRead
-            resolved = try await Task.detached { try reader(useProduction) ?? "" }.value
+            resolved = try await credentialCache.resolve(useProduction: useProduction, read: credentialRead)
         } else if writeKey {
             let writer = credentialSave
             try await Task.detached { try writer(supplied) }.value
@@ -144,7 +144,10 @@ final class WorkspaceStore {
         try Task.checkCancellation()
         guard generation == expected else { throw CancellationError() }
         if resolveCredential && resolved.isEmpty { throw WorkspaceError(message: "钥匙串中没有可用的运行密钥，请在连接设置中重新填写。") }
-        if writeKey { savedAPIKey = supplied; credentialAccessDeferred = false; reusesExistingConnection = false }
+        if writeKey {
+            savedAPIKey = supplied; credentialAccessDeferred = false; reusesExistingConnection = false
+            credentialCache.remember(supplied, useProduction: false)
+        }
         tunnelID = tunnel
         UserDefaults.standard.set(tunnel, forKey: "tunnelID")
         settingsMessage = "已保存。运行密钥保存在 macOS 钥匙串。"
@@ -152,7 +155,7 @@ final class WorkspaceStore {
     }
 
     private func redacted(_ value: String) -> String {
-        var text = value
+        var text = credentialCache.redacted(value)
         if !apiKey.isEmpty { text = text.replacingOccurrences(of: apiKey, with: "[密钥已隐藏]") }
         // Redact keys and signed query strings before they reach native UI or copying.
         text = text.replacingOccurrences(of: "sk-[A-Za-z0-9_-]+", with: "[密钥已隐藏]", options: .regularExpression)

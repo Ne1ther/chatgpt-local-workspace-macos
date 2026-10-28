@@ -57,7 +57,11 @@ sealed class LocalDashboard : IDisposable
                 // Keep the UI replaceable without restarting the MCP worker or its commands.
                 string page=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"dashboard.html");
                 if(File.Exists(page))Send(stream,200,"text/html",File.ReadAllText(page,Encoding.UTF8));
-                else using(var reader=new StreamReader(typeof(LocalDashboard).Assembly.GetManifestResourceStream("dashboard.html")))Send(stream,200,"text/html",reader.ReadToEnd());
+                else {
+                    var embedded=typeof(LocalDashboard).Assembly.GetManifestResourceStream("dashboard.html");
+                    if(embedded==null)Send(stream,503,"text/plain","Workspace UI is missing. Reinstall the application.");
+                    else using(var reader=new StreamReader(embedded))Send(stream,200,"text/html",reader.ReadToEnd());
+                }
             }
             else if(uri.AbsolutePath=="/api/local-actions")Send(stream,200,"application/json",Json.Serialize(new{token=actionToken}));
             else if(uri.AbsolutePath=="/api/diagnostics")Send(stream,200,"application/json",Json.Serialize(WorkspaceDiagnostics.Read()));

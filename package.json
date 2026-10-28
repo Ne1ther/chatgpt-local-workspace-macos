@@ -5,7 +5,7 @@
     "build:ui": "node scripts/build-dashboard.cjs",
     "clean:macos": "node scripts/clean_macos.cjs --apply",
     "test": "node scripts/test-platform.cjs",
-    "test:mac": "node --test tests/macos.test.cjs tests/reliability.test.cjs tests/dashboard-ui.test.cjs tests/navigation.test.cjs tests/preview-state.test.cjs tests/local-access.test.cjs tests/cleanup.test.cjs",
+    "test:mac": "node --test tests/macos.test.cjs tests/reliability.test.cjs tests/dashboard-ui.test.cjs tests/navigation.test.cjs tests/preview-state.test.cjs tests/local-access.test.cjs tests/cleanup.test.cjs tests/macos-signing.test.cjs",
     "test:ui": "node --test tests/dashboard-ui.test.cjs"
   },
   "devDependencies": {

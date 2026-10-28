@@ -21,8 +21,7 @@ trap 'rm -rf "$STAGE"' EXIT
 ditto "$ROOT_DIR/dist-macos/ChatGPT Codex Workspace.app" "$STAGE/Preview.app"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $PREVIEW_ID" "$STAGE/Preview.app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName ChatGPT Codex Workspace Preview' "$STAGE/Preview.app/Contents/Info.plist"
-codesign --force --sign - "$STAGE/Preview.app"
-codesign --verify --deep --strict "$STAGE/Preview.app"
+./scripts/sign_macos.sh "$STAGE/Preview.app"
 if [[ -e "$PREVIEW" ]]; then mv "$PREVIEW" "$STAGE/Previous.app"; fi
 mv "$STAGE/Preview.app" "$PREVIEW"
 echo "Local preview: $PREVIEW"

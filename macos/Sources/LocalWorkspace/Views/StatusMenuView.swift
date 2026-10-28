@@ -40,12 +40,12 @@ struct StatusMenuView: View {
                 Button { store.destination = .workbench; delegate.showMainWindow() } label: {
                     HStack { Text("查看工作台"); Spacer(); Image(systemName: "arrow.up.right") }.frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent).controlSize(.large)
+                .buttonStyle(.borderedProminent).tint(WorkspacePalette.button).controlSize(.large)
             } else {
                 Button("连接 ChatGPT", systemImage: "link") {
                     if store.canConnect { store.connect() } else { showSettings() }
                 }
-                .buttonStyle(.borderedProminent).controlSize(.large)
+                .buttonStyle(.borderedProminent).tint(WorkspacePalette.button).controlSize(.large)
             }
             HStack {
                 Button("主窗口", systemImage: "macwindow") { delegate.showMainWindow() }

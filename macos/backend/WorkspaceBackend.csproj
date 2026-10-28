@@ -13,6 +13,5 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/*.cs" Exclude="../../src/Program.cs;../../src/UiKit.cs;../../src/WorkbenchHost.cs" />
-    <EmbeddedResource Include="../../src/dashboard.html" LogicalName="dashboard.html" />
   </ItemGroup>
 </Project>

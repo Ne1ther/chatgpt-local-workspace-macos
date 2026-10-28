@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon, SpinIcon } from './icons.jsx';
 import { since } from '@/lib/format.js';
-import { groupDirectories } from '@/lib/directories.js';
+import { groupDirectories, conversationLabel, conversationSummary } from '@/lib/directories.js';
 
 // The app mark: the hand-tuned 20px version of assets/local-workspace.svg (brackets + cursor),
 // pixel-aligned at 20px and 40px. The favicon in the template uses the master.
@@ -28,14 +28,14 @@ function Sub({ source, stats, now }) {
   return <span className="thread-sub">{parts.map((part, index) => [index ? <i key={'d' + index} className="sep">·</i> : null, part])}</span>;
 }
 
-function Row({ id, title, icon, initial, active, stats, total, now, rail, onClick, pressed = true, source, sub = false, trail = null }) {
+function Row({ id, title, icon, initial, active, stats, total, now, rail, onClick, pressed = true, source, sub = false, subtitle, trail = null }) {
   const button = (
     <button type="button" id={id} className={cn('thread', active && 'active', sub && 'two-line')} aria-label={title}
       title={rail ? undefined : title} aria-pressed={pressed ? !!active : undefined} onClick={onClick}>
       <span className="thread-glyph">{icon ? <Icon name={icon} /> : <><Icon name="chat" className="glyph-icon" /><span className="thread-initial">{initial}</span></>}</span>
       <span className="thread-text">
         <b>{title}</b>
-        {sub ? <Sub source={source} stats={stats} now={now} /> : null}
+        {subtitle ? <span className="thread-sub">{subtitle}</span> : sub ? <Sub source={source} stats={stats} now={now} /> : null}
       </span>
       {trail || <Badge stats={stats} total={total} />}
     </button>
@@ -60,6 +60,7 @@ export function Sidebar({ conversations, thread, collapsed, rail: railAuto, load
   const rail = collapsed || railAuto;
   const [query, setQuery] = useState('');
   const [closed, setClosed] = useState(() => new Set());
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
   const directories = useMemo(() => groupDirectories(list, rail ? '' : query), [list, query, rail]);
   const toggleDirectory = id => setClosed(previous => {
     const next = new Set(previous);
@@ -79,19 +80,27 @@ export function Sidebar({ conversations, thread, collapsed, rail: railAuto, load
         </div>
         {!rail && list.length > 0 ? <label className="directory-search"><Icon name="search" size={14} /><input
           aria-label="搜索目录或对话" placeholder="搜索目录或对话" value={query} onChange={event => setQuery(event.target.value)} /></label> : null}
-        {directories.map(directory => <section className="directory-group" key={directory.id}>
+        {directories.map(directory => {
+          const expanded = expandedGroups.has(directory.id) || !!query.trim();
+          const visible = expanded ? directory.conversations : directory.conversations.filter((item, index) => index < 3 || item.thread_id === thread);
+          const remaining = directory.conversations.length - visible.length;
+          return <section className="directory-group" key={directory.id}>
           {!rail ? <button type="button" className="directory-toggle" aria-expanded={!closed.has(directory.id)}
             title={directory.path || '登记对话时可关联本地文件夹'} onClick={() => toggleDirectory(directory.id)}>
             <Icon name={directory.path ? 'folder' : 'inbox'} size={16} />
             <span className="directory-label"><b>{directory.title}</b><span>{directory.path || '对话尚未关联文件夹'}</span></span>
             <span className="directory-count tabular">{directory.conversations.length}</span><Icon name="chevronRight" size={12} />
           </button> : null}
-          {rail || !closed.has(directory.id) ? directory.conversations.map(item => (
-          <Row key={item.thread_id} title={item.title || '未命名对话'} initial={Array.from(item.title || '?')[0]} sub
+          {rail || !closed.has(directory.id) ? visible.map(item => (
+          <Row key={item.thread_id} title={conversationLabel(item, directory.conversations)} icon="chat" sub subtitle={conversationSummary(item)}
             source={sources[item.thread_id]} active={item.thread_id === thread} stats={stats && stats[item.thread_id]} now={now} rail={rail}
             onClick={() => pick(item.thread_id)} />
           )) : null}
-        </section>)}
+          {!rail && !query.trim() && !closed.has(directory.id) && directory.conversations.length > 3 && (expanded || remaining > 0) ? <button type="button" className="conversation-more" aria-expanded={expanded}
+            onClick={() => setExpandedGroups(previous => { const next = new Set(previous); if (next.has(directory.id)) next.delete(directory.id); else next.add(directory.id); return next; })}>
+            {expanded ? '收起较早会话' : `显示其余 ${remaining} 个会话`}
+          </button> : null}
+        </section>})}
         {query && !directories.length ? <p className="thread-empty">没有匹配的目录或对话</p> : null}
         {loaded && list.length === 0 ? <p className="thread-empty">还没有登记的对话。点 + 登记后，调用会按对话归类。</p> : null}
       </nav>

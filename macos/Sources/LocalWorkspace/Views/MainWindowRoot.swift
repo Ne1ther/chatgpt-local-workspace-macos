@@ -19,12 +19,16 @@ struct MainWindowRoot: View {
 
 private struct WindowChromeBridge: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { WindowChromeView() }
-    func updateNSView(_ view: NSView, context: Context) { view.window?.titlebarSeparatorStyle = .none }
+    func updateNSView(_ view: NSView, context: Context) {
+        view.window?.titlebarSeparatorStyle = .none
+        view.window?.backgroundColor = WorkspacePalette.nsColor("page")
+    }
 }
 
 private final class WindowChromeView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.titlebarSeparatorStyle = .none
+        window?.backgroundColor = WorkspacePalette.nsColor("page")
     }
 }

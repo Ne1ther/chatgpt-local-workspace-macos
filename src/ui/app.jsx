@@ -15,6 +15,7 @@ import { copyText } from '@/lib/copy.js';
 import { clock } from '@/lib/format.js';
 import { buildRows, countStates, filterRows, isRunning } from '@/lib/rows.js';
 import { changedFiles, clearSummary, conversationStats, createdAt, rowCounts, sourceOf, sumCounts } from '@/lib/adapter.js';
+import { conversationLabel } from '@/lib/directories.js';
 
 const native = new URLSearchParams(location.search).get('native') === '1';
 const readHash = () => new URLSearchParams(location.hash.slice(1)).get('thread') || '';
@@ -199,7 +200,7 @@ export function App() {
   useLayoutEffect(() => { if (bottomRef.current) toBottom(); }, [visible.length, thread, query, state, !!snapshot]);
 
   const current = metadata ? (metadata.conversations || []).find(row => row.thread_id === thread) : null;
-  const title = current ? current.title || '未命名对话' : (thread === 'unassigned' ? '未归属操作' : '全部操作');
+  const title = current ? conversationLabel(current, metadata.conversations || []) : (thread === 'unassigned' ? '未归属操作' : '全部操作');
   const startedAt = current ? createdAt(current) ?? (rows[0] && rows[0].start) : (rows[0] && rows[0].start) || undefined;
   const lastAt = (stats[thread] || {}).lastAt;
   const connection = paused ? '已暂停' : error ? '已断开' : snapshot ? '实时' : '连接中';
