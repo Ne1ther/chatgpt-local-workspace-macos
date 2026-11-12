@@ -4,7 +4,7 @@
 
 这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的独立 macOS 移植，保留原 macOS 移植并选择性纳入上游 **2.4.1 / f2ab383**。保留原作者与贡献者的 MIT 许可和署名；不是 OpenAI 官方应用，也不代表上游作者发布。
 
-**当前源码为 macOS 1.6.2 / 核心 2.4.1，公开 23 个工具并兼容 5 个旧名称。** 当前已发布安装包仍为 1.4.1 / 核心 2.3.0。使用 1.6.2 请按下方步骤从源码构建。
+**当前版本为 macOS 1.7.0 / build 15，核心 2.4.1，公开 25 个工具并兼容 5 个旧名称。** DMG 见 [macos-v1.7.0 Release](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.7.0)，也可按下方步骤从源码构建。
 
 ## 下载安装（无需编译）
 
@@ -30,7 +30,7 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 1. 按 [OpenAI Secure MCP Tunnel 官方指南](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) 获取 Tunnel ID 和运行 API Key，并准备 ChatGPT 开发者模式连接。Tunnel 权限与 ChatGPT 开发者模式权限分别管理。
 2. 在本应用打开 **连接与显示（⌘,）**，填写两个值，选择“保存并连接”。密钥保存在本机钥匙串，Tunnel ID 保存在应用偏好设置。请在应用内填写密钥，不要贴到聊天或源码里。
 3. 等 Mac 应用显示“隧道已就绪”后，打开 ChatGPT 的 Plugins 页面，点击加号 → **Add custom MCP server**。填写名称（例如 Local Workspace Mac）和简介，在 Connection 中选择 **Tunnel**，选本应用使用的同一个 Tunnel ID；按页面要求核对认证及连接信息，选择 **Create as a plugin**，检查发现的工具列表并安装该插件。
-4. 新开一个 ChatGPT 对话，在工具菜单启用刚创建的插件，然后输入“调用 `get_workspace_status` 确认连接”。本地 1.6.2 版本的响应包含 `version: 2.4.1`、`tool_count: 23`（已发布 1.4.1 为核心 2.3.0、28 个工具）、`default_shell: zsh` 和实际 Mac 程序路径。
+4. 新开一个 ChatGPT 对话，在工具菜单启用刚创建的插件，然后输入“调用 `get_workspace_status` 确认连接”。本地 1.7.0 版本的响应包含 `version: 2.4.1`、`tool_count: 25`（已发布 1.4.1 为核心 2.3.0、28 个工具）、`default_shell: zsh` 和实际 Mac 程序路径。
 5. 之后可以直接说“在 `<项目绝对路径>` 里先读取 AGENTS.md、列出目录，不修改文件”，再按需交代具体编辑任务。桌面应用的“实时工作台”显示每次调用、命令输出和修改对比；结束时点“停止”或退出应用。
 
 隧道就绪不代表 ChatGPT 已调用成功。初次调用前，工作台可能显示“等待首次调用”；“诊断连接”会区分隧道状态、工具发现与实际调用。应用必须保持运行，ChatGPT 才能通过该 Tunnel 使用这台 Mac 的工具。
@@ -53,7 +53,10 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 
 关闭主窗口的红色按钮**不会退出应用或断开连接**，已启动的 Tunnel 和本地任务继续运行。默认同时显示菜单栏图标和 Dock 图标；在“连接与显示 → 显示与后台”可独立控制，两项可以同时开启或同时关闭。关闭“在 Dock 显示”后，打开或关闭主窗口和设置窗口均保持隐藏，不再留下运行中的 Dock 图标。两项都关闭时，用 Spotlight 搜索 ChatGPT 或 Codex，或从 Finder 打开应用，即可恢复同一个进程中的主窗口。点击菜单栏图标可打开主窗口、查看连接状态、停止连接或明确退出；Dock 图标也能重新打开主窗口。只有选择“退出 ChatGPT Codex Workspace”或按 `⌘Q` 才会结束应用和它拥有的后台进程。“停止连接”只断开本次服务，应用仍留在后台。
 
-### macOS 1.6.2 源码 / 上游核心 2.4.1
+### macOS 1.7.0 / 上游核心 2.4.1
+
+- 新增 `read_research_bundle` 和 `submit_pro_report`，通过独立 CLI 暂存、查询和等待 Web Pro 咨询，报告附完整 SHA-256 收据。使用方法见文末咨询流程。
+- 共 25 个公开工具、5 个兼容名称；保留已有签名身份、凭据 helper 与本地持久状态。
 
 - “本地能力”检查实际后端对所选目录的读取，以及按需创建、写入、删除临时文件；准确报告权限拒绝与路径缺失，提供系统权限入口。
 - 连接诊断改为逐项状态与版本；概览自动归纳需要处理的问题，侧栏选中项保持文字可读。
@@ -65,10 +68,10 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 - 固定主导航，工作区列表独立滚动；概览聚焦连接、实际执行流程和最近操作，适配系统浅深色。
 - 暖白应用图标与蓝色终端下划线；顶部菜单栏仅在真实工作期间扫光，使用 Core Animation 图层，不逐帧生成图像。减少动态效果、空闲或菜单栏不可见时停止。
 - 工作台纳入上游的就地详情、可收起检查器、搜索筛选与回合分组。只打包选定的 Phosphor Duotone 矢量图标及 MIT 许可，无图标 CDN 或额外动画运行时。
-- 公开 23 个工具，兼容原 5 个工具名。命令输出默认只返回 output；read_command 可等待新输出并使用 offset 游标。完整副本仅在 include_full_output=true 时返回。
+- 当时公开 23 个工具，兼容原 5 个工具名。命令输出默认只返回 output；read_command 可等待新输出并使用 offset 游标。完整副本仅在 include_full_output=true 时返回。
 - Codex threadId 与回合元数据、写入行数统计、组件运行/磁盘版本诊断；官方 Tunnel Client 升至 0.0.16，校验发布资产 SHA-256。
 - 合并重复 Tunnel INFO 事件，保留告警、错误和其他有用信息。继续加密保存对话、计划、近期活动与独立验证证据；不采用上游启动时清空历史的行为。
-- Preview 使用独立应用标识与配置空间；当前 GitHub 更新仅包含源码，Release 安装包仍为 1.4.1。更多范围见 [移植记录](docs/MACOS-2.4.1-PORT.md)。
+- Preview 使用独立应用标识与配置空间；当时 GitHub 更新仅包含源码，Release 安装包为 1.4.1。更多范围见 [移植记录](docs/MACOS-2.4.1-PORT.md)。
 
 ### macOS 1.4 / 上游核心 2.3.0
 
@@ -89,7 +92,7 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 
 | 原版能力 | macOS 版 |
 | --- | --- |
-| 23 个公开工具及 5 个兼容名称 | 纳入上游 2.4.1；文件读写、搜索、图片、附件、命令、Git、计划、完成检查、文件历史与撤销/重做 |
+| 25 个公开工具及 5 个兼容名称 | 纳入上游 2.4.1；文件读写、搜索、图片、附件、命令、Git、计划、完成检查、文件历史与撤销/重做 |
 | 双时代协议 | 保留 legacy initialize 和上游 modern discovery、确认重试、任务句柄 |
 | 实时工作台 | WKWebView 内嵌原版 React 工作台；时间线、计划、diff、图片、搜索、筛选、暂停观察、对话归组 |
 | 操作记录与原始日志 | 原生表格、对话筛选、搜索、复制、清空与跟随最新 |
@@ -145,3 +148,20 @@ npm run clean:macos                   # 构建后移除项目内的 SDK、依赖
 目录：`macos/Sources/LocalWorkspace` 为原生应用；`macos/backend` 是现代 .NET 适配层；`src/` 继续作为共享工具核心，平台差异用 `MACOS` 条件编译隔离。
 
 上游 Windows 使用方式与原有发布记录保留在 `README.md` 的上游说明区。此 Fork 由 Ne1ther 维护 macOS 适配；不会直接推送到上游主分支。
+
+## T3 Code ↔ ChatGPT Web Pro 咨询（1.7.0）
+
+T3 Code 在本机暂存资料，将 CLI 返回的 `web_pro_prompt` 发到已启用此插件的 ChatGPT Web Pro 对话。Pro 调用 `read_research_bundle` 阅读并按要求完成咨询，再用 `submit_pro_report` 将完整 Markdown 报告及收据存入 inbox。CLI 只负责交接，不自动控制浏览器或发送对话。更新后先在 ChatGPT 插件设置中刷新工具列表。
+
+```sh
+SERVER="/Applications/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server"
+"$SERVER" --stage-consult --id design-review --inbox /absolute/project/inbox \
+  --title "Design review" --instructions "Evaluate the evidence and give actionable findings." \
+  --brief /absolute/project/brief.md --file /absolute/project/results.json
+"$SERVER" --consult-status --id design-review --wait-seconds 300
+"$SERVER" --consult-list
+```
+
+每个咨询使用新 ID（字母、数字、点、下划线或连字符，1–80 字符）。所有路径须为绝对路径，最多 20 个文件。默认每文件返回 64 KiB、总计 384 KiB；哈希对应完整文件，截断内容有明确标记。资料包是路径清单，不是内容快照；文件若更改，读取时哈希随之更改。报告同内容可安全重试，不同内容另存时间戳文件，旧报告和收据不被覆盖。
+
+桥接状态位于 `~/Library/Application Support/LocalWorkspacePlugin/consult-v1`（目录权限 0700），可用 `WORKSPACE_CONSULT_DIR` 隔离；Windows 使用 `%LOCALAPPDATA%\LocalWorkspacePlugin\consult-v1`。CLI 不进入主状态存储，不争抢 MCP 的 `owner.lock`。`--consult-status` 不等待时退出 0；等待完成退出 0，超时退出 2，输入或 I/O 错误退出 1。咨询材料与报告为本地明文，访问范围与现有文件工具相同，遵循当前用户的系统权限。

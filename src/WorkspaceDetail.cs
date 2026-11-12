@@ -347,6 +347,8 @@ static class WorkspaceDetail
     }
     static Dictionary<string,object> Info(string tool,object inner)
     {
+        if(tool=="read_research_bundle")return InfoRows(new List<object>{Row("资料包",Text(inner,"title")),Row("咨询编号",Text(inner,"consult_id"),true),Row("文件数",Text(inner,"file_count")),Row("截断文件数",Text(inner,"truncated_count")),Row("SHA256",Text(inner,"bundle_sha256"),true)},"已读取研究资料包");
+        if(tool=="submit_pro_report")return InfoRows(new List<object>{Row("咨询编号",Text(inner,"consult_id"),true),Row("报告",Text(inner,"report_path"),true),Row("收据",Text(inner,"receipt_path"),true),Row("SHA256",Text(inner,"sha256"),true)},"已保存 Pro 研究报告");
         if(tool=="import_file")return Flag(inner,"created")?InfoRows(new List<object>{Row("保存位置",Display(Text(inner,"path")),true),Row("文件大小",Bytes(Long(inner,"size_bytes"))),Row("文件类型",Text(inner,"mime_type")),Row("SHA256",Text(inner,"sha256"),true),Row("结果","已创建新文件，未覆盖已有内容")},"已接收聊天附件"):InfoRows(new List<object>{Row("结果","未导入附件"),Row("原因",Text(inner,"message"))},"附件导入失败");
         if(tool=="file_info")return FileInfo(inner);
         return InfoTail(tool,inner);

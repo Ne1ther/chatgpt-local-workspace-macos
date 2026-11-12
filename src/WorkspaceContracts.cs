@@ -13,6 +13,8 @@ static class WorkspaceContracts
         if(error){string message=Text(value,"message");if(message.Length==0)message=Text(value,"error");if(message.Length==0)message="exit_code="+Text(value,"exit_code")+", timed_out="+Text(value,"timed_out");return tool+" failed: "+Clip(message);}
         string path=Text(value,"path"),session=Text(value,"session_id");
         if(session.Length>0)return tool+": session "+session+", running="+Text(value,"running")+", exit_code="+Text(value,"exit_code")+". Output is in structuredContent.result.";
+        if(tool=="read_research_bundle")return "Read research bundle: "+Text(value,"file_count")+" files, "+Text(value,"truncated_count")+" truncated. See structuredContent.result.files.";
+        if(tool=="submit_pro_report")return "Saved Pro report: "+Text(value,"report_path")+"; SHA-256 "+Text(value,"sha256")+".";
         if(tool=="read_file")return "Read "+Text(value,"returned_count")+" lines from "+path+". next_line="+Text(value,"next_line")+". Content is in structuredContent.result.lines.";
         if(tool=="get_workspace_status")return "Local Workspace "+Text(value,"version")+": "+Text(value,"tool_count")+" tools; "+Text(value,"running_commands")+" running commands.";
         if(tool=="import_file")return "Saved attachment to "+path+" ("+Text(value,"size_bytes")+" bytes). Existing files were not overwritten.";
@@ -35,6 +37,10 @@ static class WorkspaceContracts
         string[] required=new string[0];
         if(new List<string>{"exec_command","read_command","poll_command","write_stdin","stop_command"}.Contains(tool)){
             p["session_id"]=str;p["running"]=boolean;p["exit_code"]=Nullable("integer");p["output"]=str;p["full_output"]=str;p["output_chars"]=integer;p["logs_cleared"]=boolean;p["output_mode"]=new{@enum=new[]{"delta","snapshot","page"}};p["elapsed_seconds"]=number;p["truncated"]=boolean;p["timed_out"]=boolean;p["stopped"]=boolean;required=new[]{"session_id","running","output","exit_code"};
+        }else if(tool=="read_research_bundle"){
+            p["consult_id"]=str;p["title"]=str;p["instructions"]=str;p["inbox_dir"]=str;p["file_count"]=integer;p["total_bytes"]=integer;p["truncated_count"]=integer;p["bundle_sha256"]=str;p["files"]=ArrayOf(Shape(new Dictionary<string,object>{{"path",str},{"size_bytes",integer},{"line_count",integer},{"truncated",boolean},{"sha256",str},{"content",str}},"path","size_bytes","line_count","truncated","sha256","content"));required=new[]{"consult_id","title","instructions","inbox_dir","file_count","total_bytes","truncated_count","bundle_sha256","files"};
+        }else if(tool=="submit_pro_report"){
+            foreach(string key in new[]{"consult_id","title","summary","report_path","receipt_path","structured_json_path","sha256","created_at","thread_id"})p[key]=str;p["byte_length"]=integer;p["line_count"]=integer;required=new[]{"consult_id","report_path","receipt_path","sha256","byte_length","line_count","created_at","thread_id"};
         }else if(tool=="read_file"){
             p["lines"]=ArrayOf(str);p["start_line"]=integer;p["returned_count"]=integer;p["next_line"]=Nullable("integer");required=new[]{"path","lines","returned_count","next_line"};
         }else if(tool=="read_image"||tool=="import_file"){

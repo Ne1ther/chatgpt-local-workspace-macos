@@ -8,6 +8,7 @@ static class Program
 {
     static void Main(string[] args)
     {
+        if(WorkspaceConsult.TryCli(args))return;
         Environment.SetEnvironmentVariable("PATH", string.Join(":", new[] {
             Environment.GetEnvironmentVariable("PATH"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"
         }));

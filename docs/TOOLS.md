@@ -1,6 +1,6 @@
-# 工具参数手册（28 个）
+# 工具参数手册（25 个公开工具，5 个兼容旧名称）
 
-本页是 28 个本地工具的输入参数参考，与 `src/WorkspaceServer.cs` 中 `BuildTools()` 注册的 schema 一致。工具由模型按需自动调用，你用自然语言下达任务即可；本页供你核对参数、写自动化或排查调用失败时使用。
+本页包含 macOS 1.7.0 的 25 个公开工具及 5 个兼容旧名称的输入参数参考，与 `src/WorkspaceServer.cs` 中 `BuildTools()` 注册的 schema 一致。工具由模型按需自动调用，你用自然语言下达任务即可；本页供你核对参数、写自动化或排查调用失败时使用。
 
 ## 通用约定
 
@@ -8,7 +8,7 @@
 - **2.1 返回约定**：`content` 为简短摘要，完整字段读取 `structuredContent.result`；外层同时有 `tool`、`isError` 与 `thread_id`。`read_image` 额外保留原生 image 内容。各工具的 `outputSchema` 描述字段，失败以 `error_code` / `message` 返回；命令失败也可能保留退出码和输出。不要再对摘要文本执行 JSON 解析。
 - **路径必须是绝对路径**，用正斜杠（如 `E:/work/api`）。`apply_patch` 的补丁内文件路径相对于 `cwd`。不要在下划线前插入 Markdown 转义反斜杠。
 - **返回信封**：每个工具返回 `content`（文本，权威结果）+ `structuredContent`（`{tool, result, isError}`）。命令类工具的 `result` 含 `running`、`exit_code`、`timed_out`、`stopped`、`session_id`、`output`、`truncated` 等字段——`isError`、`exit_code≠0`、`running=true` 各有含义：报错不是成功，仍在运行不是完成。
-- **只读 / 写入**：下表"类型"列中，只读工具不改动磁盘；写入工具会改文件或执行命令。工具从不自动 `git commit` 或 `git push`。
+- **只读 / 写入**：下表"类型"列中，只读工具不修改工作区文件（研究资料包读取会更新桥接状态）；写入工具会改文件或执行命令。工具从不自动 `git commit` 或 `git push`。
 
 ## 对话与工作台
 
@@ -289,3 +289,19 @@ Git 仓库首次打开时会建立私有审阅基准，结果见 `review.availab
 必填 `change_id: string`；可选 `redo: boolean=false`、`apply: boolean=false`。默认仅预览。应用时整组校验当前文件状态，不覆盖外部改动。返回 `change_id`、`applied`、`action`、`files`、`count`。支持的现代客户端会在实际恢复前收到 MRTR 确认。
 
 范围仅为 `write_file` / `edit_file` / `apply_patch` 的记录；不包含附件导入或目录创建；不撤销 shell、部署、远程 Git 等副作用，也不删除残留空目录。状态为 prepared/restoring/interrupted 的记录需要人工核对。历史重启恢复及凭据迁移见 [发行说明](RELEASE-2.3.0.md)。
+
+## Web Pro 咨询（macOS 1.7.0）
+
+### `read_research_bundle`（只读观察）
+
+可选 `consult_id` 从已暂存会话加载文件；也可提供 `bundle_path`（绝对 JSON 清单/普通文件路径，或内联 JSON）与 `paths`（最多 20 个绝对文件路径）。清单支持 `paths: [string]`、`files: [{path}]`、`brief`，以及 `title`、`instructions`、`inbox_dir`。合并去重后最多 20 个文件。
+
+`max_bytes_per_file` 默认 65536，范围 1024–262144；`total_max_bytes` 默认 393216，范围 4096–1048576。返回 `consult_id, title, instructions, inbox_dir, file_count, total_bytes, truncated_count, bundle_sha256, files`；每个文件包含 `path, size_bytes, line_count, truncated, sha256, content`。内容为 UTF-8 文本，预算以返回内容字节计；文件大小、行数、SHA-256 对应完整原文件。资料包 SHA-256 对应按顺序序列化的路径、完整大小和摘要清单；它可用于比较暂存与读取时文件是否变化。更新独立会话及全局状态为 reading，记录时间和 thread_id，权限边界与 read_file 相同。
+
+### `submit_pro_report`（非破坏性写入）
+
+必填 `content`：非空 Markdown。可选 `consult_id`：`[A-Za-z0-9._-]{1,80}`，不允许 . 或 ..；空值生成 pro-UTC时间。可选 `inbox_dir`：绝对目录，省略时必须能从该咨询会话找到 inbox。可选 `title`、`summary`、`structured_json`（合法 JSON 字符串）。
+
+创建 `<id>.md`，已有同内容报告复用收据；不同内容创建 `<id>__<UTC时间>.md`，同秒冲突继续加序号。结构附件为 `<stem>.structured.json`，收据为 `<stem>.receipt.json`。所有文件新建写入，绝不覆盖已有报告/附件/收据。返回 `consult_id, title, summary, report_path, receipt_path, structured_json_path, sha256, byte_length, line_count, created_at, thread_id`。收据原子镜像至 consult-v1/receipts，状态更新为 completed。两工具均声明 destructiveHint=false、idempotentHint=true、openWorldHint=false；仅阅读工具 readOnlyHint=true。
+
+CLI 交接示例及等待退出码见 [macOS 使用说明](../README.macos.md#t3-code--chatgpt-web-pro-咨询170)。

@@ -237,6 +237,7 @@ class MainForm:Form
     void StopRun(){healthUrl=null;dashboardUrl=null;webviewAt=null;NavigateWorkbench();statusPill.Value=UiStatusPill.State.Stopped;SetContext("允许目录：全部本地磁盘    ·    OpenAI Tunnel → 本机工具");if(job!=IntPtr.Zero){TerminateJobObject(job,0);CloseHandle(job);job=IntPtr.Zero;}if(client!=null){try{client.WaitForExit(3000);client.Dispose();}catch{}client=null;}if(session!=null){try{Directory.Delete(session,true);session=null;}catch(Exception ex){Log("临时目录清理失败："+ex.Message);}}SyncWorkbench();if(!busy){save.Enabled=true;tunnelInput.ReadOnly=keyInput.ReadOnly=false;UpdateRunButton();}}
     [STAThread]static void Main(string[] args)
     {
+        if(WorkspaceConsult.TryCli(args))return;
         AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);
         WebviewLoader.Hook();
         if(args.Length>0&&args[0]=="--mcp"){try{WorkspaceServer.Run();}catch(Exception ex){Console.Error.WriteLine("[Workspace] runtime failed: "+ex.GetBaseException().Message);Environment.ExitCode=1;}return;}

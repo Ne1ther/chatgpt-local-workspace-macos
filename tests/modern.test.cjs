@@ -3,10 +3,12 @@
 // Legacy behaviour is covered by mcp.test.cjs and must not regress.
 const { spawn } = require('child_process');
 const fs = require('fs'), assert = require('assert'), path = require('path'), os = require('os');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-workspace-modern-'));
+const isMac = process.platform === 'darwin';
+const shell = isMac ? 'zsh' : 'powershell';
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'local-workspace-check-modern-')));
 const dir = path.join(root, 'sample_space'); fs.mkdirSync(dir);
-const exe = process.env.WORKSPACE_TEST_EXE || path.join(__dirname, '../dist-next/LocalWorkspace.exe');
-const child = spawn(exe, ['--mcp'], {windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state')}});
+const exe = process.env.WORKSPACE_TEST_EXE || path.join(__dirname, isMac ? '../dist-macos/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server' : '../dist-next/LocalWorkspace.exe');
+const child = spawn(exe, ['--mcp'], {windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_EPHEMERAL_STATE:'1',WORKSPACE_CONSULT_DIR:path.join(root,'.consult'),WORKSPACE_STATE_DIR:path.join(root,'state')}});
 let seq = 0, buffer = ''; const pending = new Map();
 child.stdout.on('data', d => { buffer += d; let at; while ((at = buffer.indexOf('\n')) >= 0) { const msg = JSON.parse(buffer.slice(0, at)); buffer = buffer.slice(at + 1); const p = pending.get(msg.id); if (p) { pending.delete(msg.id); p(msg); } } });
 child.stderr.resume();
@@ -40,10 +42,10 @@ async function main() {
   // 3. Modern tools/list: resultType + CacheableResult fields + icons; ping removed in modern era.
   const list = (await modern('tools/list', {})).result;
   assert.equal(list.resultType, 'complete');
-  assert.equal(list.tools.length, 28);
+  assert.equal(list.tools.length, 25);
   assert.equal(list.cacheScope, 'private'); assert(list.ttlMs > 0);
   assert(list.tools.every(t => Array.isArray(t.icons) && t.icons[0].src.startsWith('data:image/svg+xml;base64,') && t.icons[0].mimeType === 'image/svg+xml'), 'icons missing');
-  assert.equal(list._meta['io.modelcontextprotocol/serverInfo'].version, '2.3.0');
+  assert.equal(list._meta['io.modelcontextprotocol/serverInfo'].version, '2.4.1');
   const ping = await modern('ping', {});
   assert.equal(ping.error.code, -32601, 'ping must be removed in the modern era');
 
@@ -108,7 +110,7 @@ async function main() {
   assert(!noElicit.isError); assert.equal(fs.readFileSync(fixture, 'utf8'), 'v3\n');
 
   // 6. Tasks extension: a still-running exec_command becomes a task handle.
-  const task = await modernCall('exec_command', { shell: 'powershell', cmd: "Start-Sleep -Milliseconds 1500; Write-Output 'task-ok'", cwd: dir, yield_time_ms: 0 });
+  const task = await modernCall('exec_command', { shell, cmd: isMac ? "sleep 1.5; echo task-ok" : "Start-Sleep -Milliseconds 1500; Write-Output 'task-ok'", cwd: dir, yield_time_ms: 0 });
   assert.equal(task.resultType, 'task', JSON.stringify(task));
   assert.equal(task.status, 'working'); assert(task.taskId); assert.equal(task.pollIntervalMs, 1000);
   const early = (await modern('tasks/get', { taskId: task.taskId })).result;
@@ -116,11 +118,11 @@ async function main() {
   let final = early;
   for (let i = 0; i < 30 && final.status === 'working'; i++) { await sleep(300); final = (await modern('tasks/get', { taskId: task.taskId })).result; }
   assert.equal(final.status, 'completed', JSON.stringify(final));
-  assert(final.result.structuredContent.result.full_output.includes('task-ok'));
+  assert(final.result.structuredContent.result.output.includes('task-ok'));
   assert.equal(final.result.isError, false);
 
   // 6a. tasks/cancel stops the process tree; status becomes cancelled.
-  const doomed = await modernCall('exec_command', { shell: 'powershell', cmd: 'Start-Sleep -Seconds 30', cwd: dir, yield_time_ms: 0 });
+  const doomed = await modernCall('exec_command', { shell, cmd: isMac ? 'sleep 30' : 'Start-Sleep -Seconds 30', cwd: dir, yield_time_ms: 0 });
   assert.equal(doomed.resultType, 'task');
   const ack = (await modern('tasks/cancel', { taskId: doomed.taskId })).result;
   assert.equal(ack.resultType, 'complete');
@@ -135,7 +137,7 @@ async function main() {
   assert.equal(unknown.error.code, -32602);
 
   // 6c. Without the tasks extension the client keeps the classic session result.
-  const classic = await modernCall('exec_command', { shell: 'powershell', cmd: 'Start-Sleep -Seconds 5', cwd: dir, yield_time_ms: 0 }, { elicitation: {} });
+  const classic = await modernCall('exec_command', { shell, cmd: isMac ? 'sleep 5' : 'Start-Sleep -Seconds 5', cwd: dir, yield_time_ms: 0 }, { elicitation: {} });
   assert.equal(classic.resultType, 'complete');
   assert(classic.structuredContent.result.running && classic.structuredContent.result.session_id);
   await modernCall('stop_command', { session_id: classic.structuredContent.result.session_id }, { elicitation: {} });
@@ -148,10 +150,10 @@ async function main() {
   const legacyPing = await request('ping');
   assert.deepEqual(legacyPing.result, {});
   const legacyList = await request('tools/list');
-  assert.equal(legacyList.result.tools.length, 28);
+  assert.equal(legacyList.result.tools.length, 25);
   assert(legacyList.result.resultType === undefined && legacyList.result.ttlMs === undefined, 'legacy tools/list must stay unchanged');
   const legacyStatus = await request('tools/call', { name: 'get_workspace_status', arguments: {} });
-  assert.equal(legacyStatus.result.structuredContent.result.version, '2.3.0');
+  assert.equal(legacyStatus.result.structuredContent.result.version, '2.4.1');
   assert(legacyStatus.result.structuredContent.result.protocol_versions.some(v => v.includes(PV)));
   console.log('PASS modern era: discover, negotiation, resultType/cache fields, icons, trace, MRTR gate, tasks lifecycle, legacy fallback');
 }

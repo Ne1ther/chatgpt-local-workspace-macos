@@ -1,5 +1,14 @@
 # macOS Fork 验证记录
 
+## macOS 1.7.0 / build 15 · 2026-11-12
+
+- `npm run test:mac`：49 项，48 通过、1 项 Windows 专用凭据测试跳过、0 失败。套件包含 `mcp.test.cjs`、`modern.test.cjs` 及 7 项咨询桥接测试；25 个公开工具与 5 个兼容名称全部实际调用并校验输出 schema。
+- 新增测试验证资料完整 SHA-256、UTF-8/总字节截断、绝对路径与 OS 权限拒绝、报告/附件/收据不覆盖、同秒冲突、跨秒幂等及缺少收据恢复。真实 MCP 持有 owner.lock 时，另一个 MCP 被拒绝，而 stage/status/list CLI 与等待报告完成均成功。
+- `./scripts/build_and_run.sh --install` 完成签名热安装；`./scripts/package_macos.sh` 完成 arm64 DMG/ZIP。保留原凭据 helper 和签名脚本源码；应用及 helper 的 designated requirement 与 1.6.2 安装版相同。最终安装与打包产物另核对 SHA-256。
+- 安装版恢复既有 Tunnel 配置，readyz 与后端诊断 HTTP 200；运行密钥、MCP 目标、本地程序、隧道存活与就绪检查通过。安装版 `--consult-list` 在 GUI/Tunnel/MCP 均运行时退出 0。没有通过工具请求任何密码或修改 Keychain ACL。
+- DMG 通过 `hdiutil verify`；DMG SHA-256：`3ff2d4d79fdb584478ea129ba9518dd6d9e43500e636d8dd53d3eb524ad7c2e4`。完整本地日志及产物身份见忽略提交的 `.local/releases/1.7.0/verification.json`。
+- 本轮验证为本机真实后端与安装/连接测试；未实际发送 ChatGPT Web Pro 咨询。Web 端需先刷新插件工具元数据，CLI 返回可直接使用的 web_pro_prompt。Windows 编译清单已加入共享源码，本机未运行 Windows 测试。
+
 ## macOS 1.6.2 · 2026-10-28
 
 - `npm test`：40 项，39 通过、1 项 Windows 专用跳过、0 失败。新增真实浏览器回归覆盖同名宿主会话的日期/编号、默认收起、展开、编号搜索和较早选择保留。

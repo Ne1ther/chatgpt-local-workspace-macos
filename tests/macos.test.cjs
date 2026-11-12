@@ -7,14 +7,14 @@ const path = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const Ajv = require('ajv');
 
-test('macOS: 23 advertised tools and 5 compatible aliases, isolation, POSIX process lifecycle and MCP compatibility', { timeout: 90000 }, async t => {
+test('macOS: 25 advertised tools and 5 compatible aliases, isolation, POSIX process lifecycle and MCP compatibility', { timeout: 90000 }, async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-mac-integration-')));
   const stateService = 'community.localworkspace.mac.state-encryption.test.' + path.basename(root);
   const exe = process.env.WORKSPACE_TEST_EXE || path.resolve(__dirname, '../dist-macos/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server');
   const child = spawn(exe, ['--mcp'], { stdio: ['pipe', 'pipe', 'pipe'], env: {
     ...process.env, WORKSPACE_TUNNEL_ID: 'tunnel_0123456789abcdef0123456789abcdef',
     CONTROL_PLANE_API_KEY: 'sk-offline-config-fixture-not-a-real-key', WORKSPACE_TUNNEL_HEALTH_FILE: '', WORKSPACE_STATE_DIR: path.join(root, '.state'),
-    WORKSPACE_TEST_STATE_KEYCHAIN_SERVICE: stateService
+    WORKSPACE_CONSULT_DIR: path.join(root, '.consult'), WORKSPACE_TEST_STATE_KEYCHAIN_SERVICE: stateService
   } });
   let buffer = '', stderr = '', seq = 0, base = '';
   const pending = new Map(), seen = new Set(), schemas = new Map();
@@ -69,14 +69,14 @@ test('macOS: 23 advertised tools and 5 compatible aliases, isolation, POSIX proc
     const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'mac-integration', version: '1' } });
     assert.equal(init.result.protocolVersion, '2025-06-18');
     const list = (await rpc('tools/list')).result.tools;
-    assert.equal(list.length, 23);
+    assert.equal(list.length, 25);
     const ajv = new Ajv({ strict: false });
     for (const item of list) schemas.set(item.name, ajv.compile(item.outputSchema));
     assert(list.find(x => x.name === 'exec_command').inputSchema.properties.shell.enum.includes('zsh'));
     const status = await tool('get_workspace_status');
     assert.equal(status.version, '2.4.1');
     assert.deepEqual([...status.deprecated_tools].sort(), ['file_info','list_commands','poll_command','read_workspace_activity','stop_command'].sort());
-    assert.equal(status.default_shell, 'zsh'); assert.equal(status.tool_count, 23);
+    assert.equal(status.default_shell, 'zsh'); assert.equal(status.tool_count, 25);
     assert(status.executable.endsWith('workspace-server')); assert.equal(status.host_session_observed, true);
     const conversation = await tool('register_conversation', { path: root, title: 'macOS 中文检查' });
     assert(conversation.thread_id);
@@ -97,6 +97,8 @@ test('macOS: 23 advertised tools and 5 compatible aliases, isolation, POSIX proc
     assert(edited, 'edited file is journaled');
     await tool('restore_change', { change_id: edited.id });
     assert.equal(fs.readFileSync(fixture, 'utf8'), 'alpha\n中文 gamma\n', 'restore defaults to preview');
+    await tool('read_research_bundle', { paths: [fixture] });
+    await tool('submit_pro_report', { consult_id: 'mac-smoke', inbox_dir: path.join(root, 'pro-inbox'), content: '# Test report' });
     const plan = [{ step: 'Verify macOS port', status: 'in_progress' }];
     await tool('update_plan', { path: root, plan });
     assert.equal((await tool('check_task_completion', { path: root })).can_finish, false);
@@ -214,7 +216,7 @@ test('macOS: 23 advertised tools and 5 compatible aliases, isolation, POSIX proc
       resolved_issue_id: lastIssue.last_issue_id,
       recovery_note: 'All intentional refusal/timeout fixtures were inspected; successful file inspection proves the runtime remains healthy.',
       recovery_evidence_id: proof.structuredContent.activity_id,
-      plan: [{ step: plan[0].step, status: 'completed', evidence: 'All 28 tools exercised against isolated macOS fixtures.' }] });
+      plan: [{ step: plan[0].step, status: 'completed', evidence: 'All 30 tools exercised against isolated macOS fixtures.' }] });
     assert.equal((await tool('check_task_completion', { path: root })).can_finish, true);
     assert.equal((await fetch(base)).status, 200);
     assert.equal((await fetch(new URL('/api/snapshot', base), { headers: { Origin: 'https://example.com' } })).status, 403);

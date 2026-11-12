@@ -40,7 +40,7 @@ test('actual backend access checks preserve files and distinguish denial, missin
   };
   try {
     await rpc('initialize');
-    assert.equal((await rpc('tools/list')).result.tools.length, 23);
+    assert.equal((await rpc('tools/list')).result.tools.length, 25);
     const policy = (await tool('get_workspace_status')).structuredContent.result.access_policy;
     assert.equal(policy.privilege_escalation, false);
     assert.equal(policy.workspace_is_sandbox, false);

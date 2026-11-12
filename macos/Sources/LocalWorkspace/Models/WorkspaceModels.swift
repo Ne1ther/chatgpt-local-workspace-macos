@@ -60,7 +60,8 @@ struct ActivityEntry: Decodable, Identifiable, Equatable, Sendable {
     }
     var statusLabel: String { status == "failed" ? "失败" : status == "running" ? "运行中" : status == "status" ? "状态" : "已返回" }
     var displayTool: String {
-        ["get_workspace_status": "状态检查", "exec_command": "执行命令", "read_file": "读取文件",
+        ["read_research_bundle": "读取研究资料", "submit_pro_report": "提交 Pro 报告",
+         "get_workspace_status": "状态检查", "exec_command": "执行命令", "read_file": "读取文件",
          "write_file": "写入文件", "edit_file": "编辑文件", "apply_patch": "修改文件",
          "read_command": "读取输出", "poll_command": "读取输出", "list_directory": "浏览目录",
          "search_text": "搜索内容", "search_files": "搜索文件", "update_plan": "更新计划",

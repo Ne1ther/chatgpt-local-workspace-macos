@@ -1,19 +1,41 @@
 const { spawn } = require('child_process');
 const fs = require('fs'), assert = require('assert'), path = require('path'), os = require('os');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-workspace-test-'));
+const isMac = process.platform === 'darwin';
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'local-workspace-check-mcp-')));
 const dir = path.join(root, 'sample_space'); fs.mkdirSync(dir);
 const fixture = path.join(dir, 'fixture.txt');
-const exe = process.env.WORKSPACE_TEST_EXE || path.join(__dirname, '../dist-next/LocalWorkspace.exe');
-const child = spawn(exe, ['--mcp'], {windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state')}});
+const exe = process.env.WORKSPACE_TEST_EXE || path.join(__dirname, isMac ? '../dist-macos/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server' : '../dist-next/LocalWorkspace.exe');
+const child = spawn(exe, ['--mcp'], {windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_EPHEMERAL_STATE:isMac?'1':'',WORKSPACE_CONSULT_DIR:path.join(root,'consult'),WORKSPACE_STATE_DIR:path.join(root,'state')}});
 let seq = 0, buffer = ''; const pending = new Map(), notifications=[];
 child.stdout.on('data', d => { buffer += d; let at; while ((at = buffer.indexOf('\n')) >= 0) { const msg = JSON.parse(buffer.slice(0, at)); buffer = buffer.slice(at + 1); if(msg.method)notifications.push(msg); const p = pending.get(msg.id); if (p) { pending.delete(msg.id); p(msg); } } });
 child.stderr.resume();
-const request = (method, params = {}) => new Promise(resolve => { const id = ++seq; pending.set(id, resolve); child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'); });
+// Preserve the same command behaviours on macOS without requiring PowerShell.
+const posixCommands = new Map([
+  ["Start-Sleep -Milliseconds 400; Write-Output 'command-ok'", "sleep 0.4; echo command-ok"],
+  ['Start-Sleep -Seconds 15', 'sleep 15'],
+  ["Write-Output 'first-output'; Start-Sleep -Seconds 2; Write-Output 'last-output'", "echo first-output; sleep 2; echo last-output"],
+  ["Write-Output 'before-failure'; exit 7", "echo before-failure; exit 7"],
+  ["Get-Item -LiteralPath 'definitely-missing-fixture'", "ls definitely-missing-fixture"],
+  ['Start-Sleep -Seconds 30', 'sleep 30'],
+  ["$line=[Console]::ReadLine(); Write-Output ('received:'+ $line)", "read -r line; printf 'received:%s\\n' \"$line\""],
+  ['Start-Sleep -Seconds 3', 'sleep 3'],
+  ["[Console]::Write('no-newline'); Start-Sleep -Seconds 3", "printf no-newline; sleep 3"]
+]);
+const platformArgs = (name, args) => {
+  args = { ...args };
+  if (name === 'exec_command' && isMac && args.shell === 'powershell') {
+    args.shell = 'zsh';
+    for (const key of ['cmd', 'command']) if (posixCommands.has(args[key])) args[key] = posixCommands.get(args[key]);
+  }
+  if (['exec_command','read_command','poll_command','write_stdin'].includes(name)) args.include_full_output = true;
+  return args;
+};
+const request = (method, params = {}) => new Promise(resolve => { const id = ++seq; pending.set(id, resolve); child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params: method === 'tools/call' ? { ...params, arguments: platformArgs(params.name, params.arguments) } : params }) + '\n'); });
 const validators = new Map(), ajv = new (require('ajv'))({ strict: false });
 const call = async (name, args) => { const r = await request('tools/call', { name, arguments: args }); assert(!r.error, JSON.stringify(r)); const validate=validators.get(name); if(validate)assert(validate(r.result.structuredContent), name+': '+JSON.stringify(validate.errors)); return r.result; };
 async function main() {
   assert.equal((await request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } })).result.serverInfo.name, 'local-workspace');
-  const list = await request('tools/list'); assert.equal(list.result.tools.length, 28); assert.equal(list.result.tools.filter(t=>t._meta.ui?.resourceUri).length,0); assert(list.result.tools.every(t=>t.outputSchema&&t._meta['openai/toolInvocation/invoking']));assert(list.result.tools.every(t=>!t.icons),'legacy tools/list must stay icon-free for ChatGPT security validation');
+  const list = await request('tools/list'); assert.equal(list.result.tools.length, 25); assert.equal(list.result.tools.filter(t=>t._meta.ui?.resourceUri).length,0); assert(list.result.tools.every(t=>t.outputSchema&&t._meta['openai/toolInvocation/invoking']));assert(list.result.tools.every(t=>!t.icons),'legacy tools/list must stay icon-free for ChatGPT security validation');
   for(const tool of list.result.tools)validators.set(tool.name,ajv.compile(tool.outputSchema));
   assert((await request('resources/read', { uri: 'ui://local-workspace/review-v5.html' })).error);
   assert(!(await call('write_file', { path: fixture, content: '第一行\nsecond\n' })).isError); assert((await call('write_file', { path: fixture, content: 'no' })).isError);
@@ -23,8 +45,8 @@ async function main() {
   const run = (await call('exec_command', { shell: 'powershell', command: "Start-Sleep -Milliseconds 400; Write-Output 'command-ok'", cwd: dir, yield_ms: 0 })).structuredContent.result;
   let output = ''; for (let i = 0; i < 10; i++) { const snap = (await call('poll_command', { session_id: run.session_id, yield_ms: 1000 })).structuredContent.result; output += snap.output; if (!snap.running) { assert.equal(snap.exit_code, 0); break; } } assert(output.includes('command-ok'));
   assert.equal((await call('show_changes', { path: dir })).structuredContent.result.count, 1); assert.equal((await request('bogus')).error.code, -32601);
-  console.log('PASS protocol, 28 tools, read/write/edit, diff, review, command polling');
-  const escaped = path.join(root, 'sample', '_space');
+  console.log('PASS protocol, 25 public tools / 30 callable tools, read/write/edit, diff, review, command polling');
+  const escaped = dir.replace('_', '\\_');
   for (const target of [dir, dir.replaceAll('\\', '/'), escaped]) { const r = await call('list_directory', { path: target, limit: 3 }); assert(!r.isError); assert.equal(r.structuredContent.result.entries.length, 1); assert.equal(r.structuredContent.result.path, dir.replaceAll('\\', '/')); }
   const missing = await call('list_directory', { path: path.join(root, 'missing') }); assert(missing.isError); assert.equal(missing.structuredContent.result.error_code, 'PATH_NOT_FOUND');
   const beyond = await call('list_directory', { path: dir, offset: 99999 }); assert.equal(beyond.structuredContent.result.empty, false); assert.equal(beyond.structuredContent.result.returned_count, 0);
@@ -44,7 +66,7 @@ async function main() {
   assert.equal((await call('search_files', { path: dir, pattern: '*.cs', recursive: false })).structuredContent.result.matches.length, 0);
   assert.equal((await call('file_info', { path: fixture })).structuredContent.result.size_bytes, fs.statSync(fixture).size);
   console.log('PASS filename/content search, case sensitivity, recursion, Unicode/spaces and file metadata');
-  const status=(await call('get_workspace_status',{})).structuredContent.result;assert.equal(status.version,'2.3.0');assert.equal(status.tool_count,28);assert(status.tools.includes('write_stdin'));assert(status.activity.some(x=>x.status==='failed'));
+  const status=(await call('get_workspace_status',{})).structuredContent.result;assert.equal(status.version,'2.4.1');assert.equal(status.tool_count,25);assert(status.tools.includes('write_stdin'));assert(status.activity.some(x=>x.status==='failed'));
   const created=path.join(root,'new','nested');assert((await call('create_directory',{path:created})).structuredContent.result.created);assert.equal((await call('create_directory',{path:created})).structuredContent.result.created,false);
   const live=(await call('exec_command',{shell:'powershell',command:"Write-Output 'first-output'; Start-Sleep -Seconds 2; Write-Output 'last-output'",cwd:dir,yield_ms:1000})).structuredContent.result;
   const snap1=(await call('read_command',{session_id:live.session_id})).structuredContent.result;assert(snap1.full_output.includes('first-output'));assert.equal(snap1.output_mode,'snapshot');
@@ -68,8 +90,8 @@ async function main() {
   assert((await call('exec_command',{cwd:dir,shell:'powershell',cmd:'echo no',tty:true})).isError);assert((await call('exec_command',{cwd:dir,shell:'powershell',cmd:'echo one',command:'echo two'})).isError);
   const raw=(await call('exec_command',{cwd:dir,shell:'powershell',cmd:"[Console]::Write('no-newline'); Start-Sleep -Seconds 3",yield_time_ms:1000})).structuredContent.result;assert(raw.running);assert(raw.output.includes('no-newline'));const rawDone=(await call('write_stdin',{session_id:raw.session_id,yield_time_ms:4000})).structuredContent.result;assert(!rawDone.running);assert.equal(rawDone.exit_code,0);
   if(context.shells.some(x=>x.name==='git_bash'&&x.available)){const bash=await call('exec_command',{cwd:dir,shell:'bash',cmd:"printf '%s' 'quoted \"value\" and spaces'",yield_time_ms:4000});assert(!bash.isError);assert.equal(bash.structuredContent.result.output,'quoted "value" and spaces');}
-  const defaultBash=await call('exec_command',{cwd:nested,cmd:"printf '%s\\n' \"$BASH_VERSION\"; pwd; printf '%s' '中文'",yield_time_ms:4000});assert(!defaultBash.isError);assert.equal(defaultBash.structuredContent.result.shell,'git_bash');assert(defaultBash.structuredContent.result.output.includes('中文'));assert(defaultBash.structuredContent.result.output.includes('中文 空格'));assert(defaultBash.structuredContent.result.shell_executable.endsWith('/bin/bash.exe'));assert.equal(context.default_shell,'git_bash');
-  const bashInput=(await call('exec_command',{cwd:dir,cmd:"read -r line; printf 'received:%s' \"$line\"",yield_time_ms:0})).structuredContent.result;await call('write_stdin',{session_id:bashInput.session_id,chars:'bash-input\n',close:true});const bashInputDone=(await call('write_stdin',{session_id:bashInput.session_id,yield_time_ms:4000})).structuredContent.result;assert(bashInputDone.full_output.includes('received:bash-input'));assert.equal(bashInputDone.shell,'git_bash');
+  const defaultBash=await call('exec_command',{cwd:nested,cmd:"printf '%s\\n' \"$BASH_VERSION\"; pwd; printf '%s' '中文'",yield_time_ms:4000});assert(!defaultBash.isError);assert.equal(defaultBash.structuredContent.result.shell,isMac?'zsh':'git_bash');assert(defaultBash.structuredContent.result.output.includes('中文'));assert(defaultBash.structuredContent.result.output.includes('中文 空格'));assert(defaultBash.structuredContent.result.shell_executable.endsWith(isMac?'/bin/zsh':'/bin/bash.exe'));assert.equal(context.default_shell,isMac?'zsh':'git_bash');
+  const bashInput=(await call('exec_command',{cwd:dir,cmd:"read -r line; printf 'received:%s' \"$line\"",yield_time_ms:0})).structuredContent.result;await call('write_stdin',{session_id:bashInput.session_id,chars:'bash-input\n',close:true});const bashInputDone=(await call('write_stdin',{session_id:bashInput.session_id,yield_time_ms:4000})).structuredContent.result;assert(bashInputDone.full_output.includes('received:bash-input'));assert.equal(bashInputDone.shell,isMac?'zsh':'git_bash');
   const bashFail=await call('exec_command',{cwd:dir,cmd:'exit 9',yield_time_ms:4000});assert(bashFail.isError);assert.equal(bashFail.structuredContent.result.exit_code,9);
   console.log('PASS default Git Bash, Unicode cwd/output, stdin, shell identity and failure status');
   console.log('PASS workspace instruction precedence, plan state, aliases, pipe output without newline and shell selection');
