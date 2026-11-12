@@ -29,7 +29,7 @@ static class WorkspaceConsult
         Directory.CreateDirectory(path);
 #endif
     }
-    static string Root()
+    static string Root(bool create=true)
     {
         string root=Environment.GetEnvironmentVariable("WORKSPACE_CONSULT_DIR");
         if(string.IsNullOrEmpty(root)){
@@ -39,7 +39,7 @@ static class WorkspaceConsult
             root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LocalWorkspacePlugin","consult-v1");
 #endif
         }
-        root=WorkspaceServer.Full(root);PrivateDirectory(root);PrivateDirectory(Path.Combine(root,"sessions"));PrivateDirectory(Path.Combine(root,"receipts"));return root;
+        root=WorkspaceServer.Full(root);if(create){PrivateDirectory(root);PrivateDirectory(Path.Combine(root,"sessions"));PrivateDirectory(Path.Combine(root,"receipts"));}return root;
     }
     static string StateFile(string folder,string id){return WorkspaceServer.Full(Path.Combine(Root(),folder,Id(id)+".json"));}
     static Dictionary<string,object> Load(string path,bool optional=false)
@@ -71,9 +71,39 @@ static class WorkspaceConsult
     static string BundleHash(IEnumerable<object> identities){return Hash(Utf8.GetBytes(Json.Serialize(identities.ToArray())));}
     static object Identity(string path,long size,string sha){return new{path=path,size_bytes=size,sha256=sha};}
 
+    // Keep memory bounded even when offsets point deep into a large evidence file.
+    static Dictionary<string,long> Offsets(Dictionary<string,object> args)
+    {
+        var offsets=new Dictionary<string,long>(WorkspaceContext.PathComparer);object raw;
+        if(!args.TryGetValue("file_offsets",out raw))return offsets;
+        var map=raw as IDictionary<string,object>;if(map==null)throw new ArgumentException("file_offsets must be an object");
+        foreach(var kv in map){
+            object v=kv.Value;if(!(v is int)&&!(v is long)&&!(v is decimal))throw new ArgumentException("file_offsets values must be non-negative integers");
+            decimal n=Convert.ToDecimal(v);if(n<0||n!=Math.Truncate(n)||n>long.MaxValue)throw new ArgumentException("file_offsets values must be non-negative byte offsets");
+            string path=WorkspaceServer.Full(kv.Key,true);long existing;
+            if(offsets.TryGetValue(path,out existing)&&existing!=(long)n)throw new ArgumentException("Conflicting file_offsets for "+path);
+            offsets[path]=(long)n;
+        }
+        return offsets;
+    }
+    static int CompleteUtf8Length(byte[] bytes,int length,bool truncated)
+    {
+        if(truncated&&length>0){int start=length-1;while(start>0&&(bytes[start]&0xc0)==0x80)start--;int lead=bytes[start],need=lead>=0xf0?4:lead>=0xe0?3:lead>=0xc0?2:1;if(length-start<need)length=start;}
+        return length;
+    }
+    static byte[] Slice(FileStream stream,long requested,int budget,out long actualStart)
+    {
+        actualStart=Math.Min(requested,stream.Length);stream.Position=actualStart;
+        if(actualStart>0&&actualStart<stream.Length){int b;while((b=stream.ReadByte())>=0&&(b&0xc0)==0x80)actualStart++;stream.Position=actualStart;}
+        var bytes=new byte[(int)Math.Min(budget,stream.Length-actualStart)];int length=0,n;
+        while(length<bytes.Length&&(n=stream.Read(bytes,length,bytes.Length-length))>0)length+=n;
+        length=CompleteUtf8Length(bytes,length,actualStart+length<stream.Length);
+        if(length!=bytes.Length)Array.Resize(ref bytes,length);return bytes;
+    }
     public static object Read(Dictionary<string,object> args)
     {
         lock(Gate){
+            var offsets=Offsets(args);
             int per=Number(args,"max_bytes_per_file",65536,1024,262144),total=Number(args,"total_max_bytes",393216,4096,1048576);
             string id=Text(args,"consult_id"),bundle=Text(args,"bundle_path");var session=id.Length>0?Load(StateFile("sessions",Id(id)),true):new Dictionary<string,object>();
             var metadata=new Dictionary<string,object>(session);var paths=new List<string>();Manifest(session,paths);
@@ -87,18 +117,17 @@ static class WorkspaceConsult
             object direct;if(args.TryGetValue("paths",out direct))Paths(direct,paths);paths=Unique(paths);if(paths.Count==0)throw new ArgumentException("Provide consult_id, bundle_path or paths containing at least one file");
             var files=new List<object>();var identities=new List<object>();int used=0,truncated=0;
             foreach(string requested in paths){
-                string path=WorkspaceServer.Full(requested,true);byte[] bytes;long size;string sha;int lineCount=0;bool any=false;byte last=0;
+                string path=WorkspaceServer.Full(requested,true);byte[] bytes;long size,actualStart,offset;string sha;int lineCount=0;bool any=false;byte last=0;
+                if(!offsets.TryGetValue(path,out offset))offset=0;
                 using(var stream=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read))using(var digest=SHA256.Create()){
-                    size=stream.Length;int budget=Math.Min(per,total-used);using(var prefix=new MemoryStream()){
-                        byte[] chunk=new byte[8192];int n;while((n=stream.Read(chunk,0,chunk.Length))>0){digest.TransformBlock(chunk,0,n,chunk,0);for(int i=0;i<n;i++)if(chunk[i]==10)lineCount++;any=true;last=chunk[n-1];int keep=Math.Min(n,budget-(int)prefix.Length);if(keep>0)prefix.Write(chunk,0,keep);}
-                        digest.TransformFinalBlock(new byte[0],0,0);sha=Hex(digest.Hash);bytes=prefix.ToArray();
-                    }
+                    size=stream.Length;byte[] chunk=new byte[8192];int n;
+                    while((n=stream.Read(chunk,0,chunk.Length))>0){digest.TransformBlock(chunk,0,n,chunk,0);for(int i=0;i<n;i++)if(chunk[i]==10)lineCount++;any=true;last=chunk[n-1];}
+                    digest.TransformFinalBlock(new byte[0],0,0);sha=Hex(digest.Hash);
+                    bytes=Slice(stream,offset,Math.Min(per,total-used),out actualStart);
                 }
                 if(any&&last!=10)lineCount++;
-                // Drop an incomplete trailing UTF-8 code point at a byte boundary.
-                int length=bytes.Length;if(size>length&&length>0){int start=length-1;while(start>0&&(bytes[start]&0xc0)==0x80)start--;int lead=bytes[start],need=lead>=0xf0?4:lead>=0xe0?3:lead>=0xc0?2:1;if(length-start<need)length=start;}
-                string content=Utf8.GetString(bytes,0,length);int returned=Utf8.GetByteCount(content);used+=returned;bool cut=size>length;if(cut)truncated++;
-                identities.Add(Identity(path,size,sha));files.Add(new{path=path,size_bytes=size,line_count=lineCount,truncated=cut,sha256=sha,content=content});
+                string content=Utf8.GetString(bytes);used+=bytes.Length;long endOffset=actualStart+bytes.Length;bool cut=endOffset<size;if(cut)truncated++;
+                identities.Add(Identity(path,size,sha));files.Add(new{path=path,size_bytes=size,line_count=lineCount,truncated=cut,sha256=sha,content=content,offset_bytes=actualStart,next_offset_bytes=cut?endOffset:0});
             }
             string hash=BundleHash(identities),at=Now(),thread=WorkspaceServer.CurrentThread??"unassigned";
             var status=new Dictionary<string,object>{{"status","reading"},{"consult_id",id},{"last_read_at",at},{"bundle_sha256",hash},{"thread_id",thread}};
@@ -153,6 +182,47 @@ static class WorkspaceConsult
             }
         }
     }
+    static string WebPrompt(string id){return "Call read_research_bundle with consult_id="+Json.Serialize(id)+". Follow its instructions, inspect all files and disclose truncation or missing evidence. Submit your complete Markdown report through submit_pro_report with consult_id="+Json.Serialize(id)+"; include a concise summary. Return the saved report path and SHA-256.";}
+    static object Value(IDictionary<string,object> map,string key,object fallback){object value;return map.TryGetValue(key,out value)?value:fallback;}
+    static Dictionary<string,object> DashboardReceipt(Dictionary<string,object> receipt)
+    {
+        if(receipt.Count==0)return null;
+        var result=new Dictionary<string,object>();foreach(string key in new[]{"report_path","receipt_path","structured_json_path","sha256","summary","created_at"})result[key]=Text(receipt,key);
+        result["byte_length"]=Value(receipt,"byte_length",0);result["line_count"]=Value(receipt,"line_count",0);return result;
+    }
+    public static object[] DashboardList(bool compact)
+    {
+        lock(Gate){
+            string root=Root(false);if(!Directory.Exists(root))return new object[0];WorkspaceJournal.SafePath(root);
+            var ids=new HashSet<string>(StringComparer.Ordinal);
+            foreach(string folder in new[]{"sessions","receipts"}){string dir=Path.Combine(root,folder);if(!Directory.Exists(dir))continue;WorkspaceJournal.SafePath(dir);foreach(string file in Directory.GetFiles(dir,"*.json"))ids.Add(Path.GetFileNameWithoutExtension(file));}
+            var entries=new List<Dictionary<string,object>>();
+            foreach(string id in ids){
+                try{
+                    Id(id);string sessionPath=Path.Combine(root,"sessions",id+".json"),receiptPath=Path.Combine(root,"receipts",id+".json");WorkspaceJournal.SafePath(sessionPath);WorkspaceJournal.SafePath(receiptPath);
+                    var session=Load(sessionPath,true);var receipt=Load(receiptPath,true);if(session.Count==0&&receipt.Count==0)continue;
+                    var paths=Value(session,"paths",null) as IList;var files=Value(session,"files",null) as IList;
+                    var item=new Dictionary<string,object>{{"consult_id",id},{"title",Text(receipt,"title",Text(session,"title"))},{"inbox_dir",Text(session,"inbox_dir",receipt.Count>0?Path.GetDirectoryName(Text(receipt,"report_path"))??"":"")},{"file_count",paths!=null?paths.Count:files!=null?files.Count:Value(session,"file_count",0)},{"bundle_sha256",Text(session,"bundle_sha256")},{"status",receipt.Count>0?"completed":Text(session,"status")=="reading"?"reading":"staged"},{"staged_at",Text(session,"staged_at")},{"last_read_at",Text(session,"last_read_at")},{"thread_id",Text(receipt,"thread_id",Text(session,"thread_id"))},{"web_pro_prompt",WebPrompt(id)},{"receipt",DashboardReceipt(receipt)}};
+                    if(!compact)item["instructions"]=Text(session,"instructions");
+                    item["sort_at"]=new[]{Text(session,"staged_at"),Text(session,"last_read_at"),Text(receipt,"created_at")}.OrderByDescending(x=>x,StringComparer.Ordinal).First();entries.Add(item);
+                }catch(Exception ex){if(!(ex is IOException||ex is UnauthorizedAccessException||ex is ArgumentException||ex is InvalidOperationException))throw;}
+            }
+            var recent=entries.OrderByDescending(e=>Text(e,"sort_at"),StringComparer.Ordinal).ThenBy(e=>Text(e,"consult_id"),StringComparer.Ordinal).Take(20).ToArray();foreach(var item in recent)item.Remove("sort_at");return recent.Cast<object>().ToArray();
+        }
+    }
+    public static object ReadReport(string id)
+    {
+        lock(Gate){
+            Id(id);string root=Root(false),receiptPath=Path.Combine(root,"receipts",id+".json");WorkspaceJournal.SafePath(receiptPath);
+            var receipt=Load(receiptPath,true);if(receipt.Count==0)throw new FileNotFoundException("Consult report receipt not found");
+            string requested=Text(receipt,"report_path");if(requested.Length==0)throw new FileNotFoundException("Consult report path is missing");
+            // Check the original path before normalization too: normalizers may resolve symlinks.
+            WorkspaceJournal.SafePath(requested);string path=WorkspaceServer.Full(requested,true);WorkspaceJournal.SafePath(path);
+            if(!File.Exists(path))throw new FileNotFoundException("Consult report not found");
+            byte[] bytes;long actualStart,size;using(var stream=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)){size=stream.Length;bytes=Slice(stream,0,512*1024,out actualStart);}
+            return new{consult_id=id,title=Text(receipt,"title"),summary=Text(receipt,"summary"),report_path=path,sha256=Text(receipt,"sha256"),byte_length=Value(receipt,"byte_length",size),line_count=Value(receipt,"line_count",0),created_at=Text(receipt,"created_at"),truncated=bytes.Length<size,content=Utf8.GetString(bytes)};
+        }
+    }
     static Dictionary<string,object> Status(string id)
     {
         if(id.Length==0)return Load(Path.Combine(Root(),"status.json"),true);
@@ -171,7 +241,7 @@ static class WorkspaceConsult
                 string hash=BundleHash(identities),bundle=WorkspaceServer.Full(Path.Combine(inbox,id+".bundle.json")),sessionPath=StateFile("sessions",id);if(File.Exists(sessionPath))throw new IOException("Consult ID already exists; use a new ID");
                 var session=new Dictionary<string,object>{{"consult_id",id},{"title",Text(options,"--title")},{"instructions",Text(options,"--instructions")},{"inbox_dir",inbox},{"bundle_path",bundle},{"paths",paths.ToArray()},{"files",identities},{"file_count",paths.Count},{"bundle_sha256",hash},{"status","staged"},{"staged_at",Now()}};
                 Directory.CreateDirectory(inbox);Create(bundle,Utf8.GetBytes(Json.Serialize(session)+"\n"));Create(sessionPath,Utf8.GetBytes(Json.Serialize(session)+"\n"));Atomic(Path.Combine(Root(),"status.json"),session);
-                Console.WriteLine(Json.Serialize(new{ok=true,consult_id=id,title=Text(session,"title"),bundle_path=bundle,inbox_dir=inbox,file_count=paths.Count,bundle_sha256=hash,web_pro_prompt="Call read_research_bundle with consult_id="+Json.Serialize(id)+". Follow its instructions, inspect all files and disclose truncation or missing evidence. Submit your complete Markdown report through submit_pro_report with consult_id="+Json.Serialize(id)+"; include a concise summary. Return the saved report path and SHA-256."}));
+                Console.WriteLine(Json.Serialize(new{ok=true,consult_id=id,title=Text(session,"title"),bundle_path=bundle,inbox_dir=inbox,file_count=paths.Count,bundle_sha256=hash,web_pro_prompt=WebPrompt(id)}));
             }else if(args[0]=="--consult-status"){
                 int wait=0;string raw=Text(options,"--wait-seconds","0");if(!int.TryParse(raw,out wait)||wait<0||wait>3600)throw new ArgumentException("--wait-seconds must be 0..3600");
                 string id=Text(options,"--id");if(id.Length>0)Id(id);var until=DateTime.UtcNow.AddSeconds(wait);Dictionary<string,object> status;

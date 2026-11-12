@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import UserNotifications
 
 @MainActor @Observable
 final class WorkspaceStore {
@@ -40,6 +41,7 @@ final class WorkspaceStore {
     var logs: [LogEntry] = []
     var activity: [ActivityEntry] = []
     var conversations: [Conversation] = []
+    var consults: [ConsultSessionSummary] = []
     var diagnostics: String?
     var diagnosticReport: NativeDiagnosticReport?
     var diagnosticsBusy = false
@@ -67,11 +69,14 @@ final class WorkspaceStore {
     private var timeouts: [Int: Task<Void, Never>] = [:]
     private var hiddenActivityIDs: Set<String> = []
     private var latestBackendActivityIDs: Set<String> = []
+    private var knownCompletedConsultIDs: Set<String> = []
+    private var hasInitializedConsultBaseline = false
     private var tunnelLogFold = TunnelLogFold()
 
     var running: Bool { process?.isRunning == true }
     var activeCallCount: Int { activity.filter { !$0.isConnectionEvent && $0.status == "running" }.count }
     var activeWorkCount: Int { max(activeCallCount, activeCommandCount) }
+    var activeConsultCount: Int { consults.filter { $0.status == "staged" || $0.status == "reading" }.count }
     var recommendations: [WorkspaceAdvice] {
         WorkspaceHealthAdvisor.recommendations(state: state, stale: snapshotStale, observed: actualCallObserved,
                                               activity: activity, access: localAccess.report)
@@ -426,14 +431,25 @@ final class WorkspaceStore {
         monitor = Task {
             var tick = 0
             var previousData: Data?
+            var previousETag: String?
             while !Task.isCancelled && generation == expected {
                 if let url = dashboardURL {
-                    var request = URLRequest(url: url.appendingPathComponent("api/native-status")); request.timeoutInterval = 2
+                    var request = URLRequest(url: url.appendingPathComponent("api/native-status"))
+                    request.timeoutInterval = 2
+                    request.cachePolicy = .reloadIgnoringLocalCacheData
+                    if let previousETag {
+                        request.setValue(previousETag, forHTTPHeaderField: "If-None-Match")
+                    }
                     do {
                         let (data, response) = try await URLSession.shared.data(for: request)
                         guard generation == expected else { return }
-                        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw WorkspaceError(message: "状态读取失败") }
-                        if data != previousData {
+                        guard let http = response as? HTTPURLResponse, (http.statusCode == 200 || http.statusCode == 304) else {
+                            throw WorkspaceError(message: "状态读取失败")
+                        }
+                        if let etag = http.value(forHTTPHeaderField: "ETag"), !etag.isEmpty {
+                            previousETag = etag
+                        }
+                        if http.statusCode == 200, data != previousData {
                             let snapshot = try await Task.detached(priority: .utility) {
                                 let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
                                 return try decoder.decode(DashboardSnapshot.self, from: data)
@@ -447,6 +463,20 @@ final class WorkspaceStore {
                             for conversation in snapshot.conversations { known[conversation.id] = conversation }
                             let next = known.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
                             if conversations != next { conversations = next }
+                            if let incomingConsults = snapshot.consults {
+                                let completedNow = Set(incomingConsults.filter { $0.status == "completed" }.map(\.consultId))
+                                if hasInitializedConsultBaseline {
+                                    let newlyCompleted = incomingConsults.filter {
+                                        $0.status == "completed" && !knownCompletedConsultIDs.contains($0.consultId)
+                                    }
+                                    for session in newlyCompleted {
+                                        notifyConsultCompleted(session)
+                                    }
+                                }
+                                knownCompletedConsultIDs.formUnion(completedNow)
+                                hasInitializedConsultBaseline = true
+                                if consults != incomingConsults { consults = incomingConsults }
+                            }
                             if let version = snapshot.version, !version.isEmpty { coreVersion = String(version.prefix(32)) }
                             previousData = data
                         }
@@ -463,6 +493,26 @@ final class WorkspaceStore {
                 }
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
+        }
+    }
+
+    private func notifyConsultCompleted(_ session: ConsultSessionSummary) {
+        guard Bundle.main.bundleIdentifier != nil,
+              Bundle.main.bundlePath.hasSuffix(".app") else { return }
+        let title = session.title.isEmpty ? session.consultId : session.title
+        let summary = session.receipt?.summary ?? "ChatGPT Web Pro 研究报告已归档至本地工作区。"
+        let identifier = "consult-completed-\(session.consultId)"
+        Task.detached(priority: .utility) {
+            let center = UNUserNotificationCenter.current()
+            let settings = await center.notificationSettings()
+            guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "科研咨询报告已归档"
+            content.subtitle = title
+            content.body = String(summary.prefix(180))
+            content.sound = .default
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+            try? await center.add(request)
         }
     }
 
@@ -555,6 +605,8 @@ final class WorkspaceStore {
         selectedThreadID = ""
         showsAllActivity = false
         actualCallObserved = false
+        hasInitializedConsultBaseline = false
+        knownCompletedConsultIDs.removeAll()
         if wasActive { log("连接已停止，保留上次操作记录。计划、对话与近期活动已本地保存；命令进程不跨重启恢复。") }
         snapshotStale = !activity.isEmpty
     }

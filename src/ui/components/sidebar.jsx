@@ -6,9 +6,9 @@ import { Icon, SpinIcon } from './icons.jsx';
 import { since } from '@/lib/format.js';
 import { groupDirectories, conversationLabel, conversationSummary } from '@/lib/directories.js';
 
-// The app mark: the hand-tuned 20px version of assets/local-workspace.svg (brackets + cursor),
-// pixel-aligned at 20px and 40px. The favicon in the template uses the master.
-const MARK = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><rect x='2' y='2' width='16' height='16' rx='3.5' fill='#ffffff'/><rect x='2.5' y='2.5' width='15' height='15' rx='3.0' fill='none' stroke='#cdcdcd'/><rect x='5' y='5' width='2' height='10' fill='#161616'/><rect x='5' y='5' width='3' height='2' fill='#161616'/><rect x='5' y='13' width='3' height='2' fill='#161616'/><rect x='13' y='5' width='2' height='10' fill='#161616'/><rect x='12' y='5' width='3' height='2' fill='#161616'/><rect x='12' y='13' width='3' height='2' fill='#161616'/><rect x='9' y='8' width='2' height='4' fill='#161616'/></svg>");
+// The app mark, hand-tuned at 20px: an obsidian-titanium rounded tile holding the Conduit Vault —
+// left local bracket "[", top-right cloud portal "┐", sapphire ">" chevron, and cyan "_" live baseline.
+const MARK = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><rect x='1' y='1' width='18' height='18' rx='4.5' fill='#10131c'/><rect x='1.5' y='1.5' width='17' height='17' rx='4' fill='none' stroke='#a8c4ff' stroke-opacity='.22'/><path d='M6.8 5.2H5.4a1.2 1.2 0 0 0-1.2 1.2v7.2a1.2 1.2 0 0 0 1.2 1.2h1.4' fill='none' stroke='#eef3fb' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'/><path d='M12.4 5.2h2.2a1.2 1.2 0 0 1 1.2 1.2v2.2' fill='none' stroke='#8cb2f0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/><path d='M8.5 7.4 11.3 10l-2.8 2.6' fill='none' stroke='#3d8bff' stroke-width='1.65' stroke-linecap='round' stroke-linejoin='round'/><line x1='11.8' y1='14.8' x2='15.6' y2='14.8' stroke='#66ccff' stroke-width='1.65' stroke-linecap='round'/></svg>");
 
 // Right side of a conversation: a spinner while something runs, else the failed count.
 function Badge({ stats, total }) {

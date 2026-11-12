@@ -1,5 +1,11 @@
 # macOS Fork 验证记录
 
+## macOS 1.8.0 / build 16 · 2026-11-12
+
+- `npm run test:mac`：54 项，53 通过、1 项 Windows 专用凭据测试跳过、0 失败。新增回归覆盖 `read_research_bundle` UTF-8 字节偏移续读（`file_offsets` / `next_offset_bytes`）、`/api/snapshot` 与 `/api/native-status` 强 `ETag` / `304 Not Modified`、`/api/consult-report` 512 KB 报告读取及符号链接拒绝、`/api/restore-change` 同源鉴权与 `UNDO_CONFLICT` 冲突保护。
+- 20 项 Playwright 浏览器测试全部通过：浅/深色三级正文相对底色对比度均高于 `4.5:1`，`?native=1` 原生内嵌隐藏重复连接胶囊并保留可见性轮询控制，640–1920 宽度无横向溢出。
+- 全新 Conduit Vault 图标与 `15×15pt`（`@2x` `30×30px`）菜单栏模板通过连通域校验，右下 `_` 脉冲层按 `0.5pt` Retina 网格贴合；`./scripts/build_and_run.sh --build-only` 与 `./scripts/install_macos.sh` 热更新至 `/Applications/ChatGPT Codex Workspace.app` 后，既有钥匙串凭据免重授权恢复 `--connect` 隧道与 MCP 服务。
+
 ## macOS 1.7.0 / build 15 · 2026-11-12
 
 - `npm run test:mac`：49 项，48 通过、1 项 Windows 专用凭据测试跳过、0 失败。套件包含 `mcp.test.cjs`、`modern.test.cjs` 及 7 项咨询桥接测试；25 个公开工具与 5 个兼容名称全部实际调用并校验输出 schema。

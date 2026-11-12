@@ -290,13 +290,13 @@ Git 仓库首次打开时会建立私有审阅基准，结果见 `review.availab
 
 范围仅为 `write_file` / `edit_file` / `apply_patch` 的记录；不包含附件导入或目录创建；不撤销 shell、部署、远程 Git 等副作用，也不删除残留空目录。状态为 prepared/restoring/interrupted 的记录需要人工核对。历史重启恢复及凭据迁移见 [发行说明](RELEASE-2.3.0.md)。
 
-## Web Pro 咨询（macOS 1.7.0）
+## Web Pro 咨询（macOS 1.7.0+）
 
 ### `read_research_bundle`（只读观察）
 
-可选 `consult_id` 从已暂存会话加载文件；也可提供 `bundle_path`（绝对 JSON 清单/普通文件路径，或内联 JSON）与 `paths`（最多 20 个绝对文件路径）。清单支持 `paths: [string]`、`files: [{path}]`、`brief`，以及 `title`、`instructions`、`inbox_dir`。合并去重后最多 20 个文件。
+可选 `consult_id` 从已暂存会话加载文件；也可提供 `bundle_path`（绝对 JSON 清单/普通文件路径，或内联 JSON）、`paths`（最多 20 个绝对文件路径）与可选 `file_offsets`（`{ [path]: nonNegativeInt }`，按字节偏移从上次截断处无损续读）。清单支持 `paths: [string]`、`files: [{path}]`、`brief`，以及 `title`、`instructions`、`inbox_dir`。合并去重后最多 20 个文件。
 
-`max_bytes_per_file` 默认 65536，范围 1024–262144；`total_max_bytes` 默认 393216，范围 4096–1048576。返回 `consult_id, title, instructions, inbox_dir, file_count, total_bytes, truncated_count, bundle_sha256, files`；每个文件包含 `path, size_bytes, line_count, truncated, sha256, content`。内容为 UTF-8 文本，预算以返回内容字节计；文件大小、行数、SHA-256 对应完整原文件。资料包 SHA-256 对应按顺序序列化的路径、完整大小和摘要清单；它可用于比较暂存与读取时文件是否变化。更新独立会话及全局状态为 reading，记录时间和 thread_id，权限边界与 read_file 相同。
+`max_bytes_per_file` 默认 65536，范围 1024–262144；`total_max_bytes` 默认 393216，范围 4096–1048576。返回 `consult_id, title, instructions, inbox_dir, file_count, total_bytes, truncated_count, bundle_sha256, files`；每个文件包含 `path, size_bytes, line_count, offset_bytes, next_offset_bytes, truncated, sha256, content`（读完时 `next_offset_bytes` 为 `null`，未读完时返回下一段安全 UTF-8 起始字节偏移）。内容为 UTF-8 文本，起止切分自动对齐多字节字符边界，预算以返回内容字节计；文件大小、行数、SHA-256 对应完整原文件。资料包 SHA-256 对应按顺序序列化的路径、完整大小和摘要清单；它可用于比较暂存与读取时文件是否变化。更新独立会话及全局状态为 reading，记录时间和 thread_id，权限边界与 read_file 相同。
 
 ### `submit_pro_report`（非破坏性写入）
 

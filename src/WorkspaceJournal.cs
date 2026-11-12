@@ -54,6 +54,11 @@ static class WorkspaceJournal
     {
         lock(Gate)return new{path=Presentation.DisplayPath(path),changes=Changes.Where(c=>c.Thread==thread&&c.Files.Any(f=>WorkspaceActivity.Within(Presentation.DisplayPath(f.Path),Presentation.DisplayPath(path)))).Reverse().Select(c=>new{id=c.Id,tool=c.Tool,at=c.At.ToString("o"),status=c.Status,undone=c.Undone,files=c.Files.Select(f=>new{path=Presentation.DisplayPath(f.Path),before_sha256=Hash(f.Before),after_sha256=c.Status=="prepared"?null:Hash(f.After)}).ToArray()}).ToArray(),scope="write_file/edit_file/apply_patch only; newest 100 operations / 48 MiB. Prepared/interrupted changes require manual inspection. Empty directories and shell effects are not restored."};
     }
+    public static string ThreadForChange(string id)
+    {
+        if(string.IsNullOrWhiteSpace(id))throw new ArgumentException("change_id is required");
+        lock(Gate){var entry=Changes.FirstOrDefault(c=>c.Id==id);if(entry==null)throw new ArgumentException("Unknown change_id");return entry.Thread;}
+    }
     public static string Target(string id,string thread)
     {
         lock(Gate) {

@@ -1,6 +1,7 @@
 // One-line wording for a call, Codex style: a short verb, then the object it acted on.
 // "运行 npm run build:ui", "编辑 dashboard.css", "读取 WorkspaceDetail.cs 第 96–117 行".
-import { base } from './format.js';
+import { base, bytes } from './format.js';
+import { consultField, consultNumber } from './consult.js';
 import { titleOf } from './labels.js';
 import { rowCounts } from './adapter.js';
 import { isRunning } from './rows.js';
@@ -22,6 +23,21 @@ export function phraseOf(row) {
   if (kind === 'command') {
     const command = firstLine(detail.command || (row.session && row.session.command) || detail.summary);
     return { verb: running ? '正在运行' : '运行', object: command, mono: true };
+  }
+  // Web Pro consultation: "读取资料包 架构评审 · 6 个文件 · 续读 64 KB 起" / "归档 Pro 报告 架构评审 · 182 行".
+  if (row.tool === 'read_research_bundle') {
+    const object = consultField(detail, 'title') || consultField(detail, 'consult_id') || base(row.target) || '研究资料包';
+    if (detail.is_error || failed) return { verb: '未能读取资料包', object };
+    const files = consultNumber(detail, 'file_count'), offset = consultNumber(detail, 'offset_bytes'), next = consultNumber(detail, 'next_offset_bytes');
+    const note = [files ? files + ' 个文件' : '', offset > 0 ? '续读 ' + bytes(offset) + ' 起' : '', next > 0 ? '未读完' : ''].filter(Boolean).join(' · ');
+    return { verb: running ? '正在读取资料包' : '读取资料包', object, note };
+  }
+  if (row.tool === 'submit_pro_report') {
+    const path = consultField(detail, 'report_path');
+    const object = consultField(detail, 'title') || (path ? base(path) : '') || consultField(detail, 'consult_id') || 'Pro 报告';
+    if (detail.is_error || failed) return { verb: '未能归档报告', object };
+    const lines = consultNumber(detail, 'line_count');
+    return { verb: running ? '正在归档报告' : '归档 Pro 报告', object, note: lines ? lines + ' 行' : '' };
   }
   if (kind === 'write') {
     const files = detail.files || [];
@@ -66,6 +82,8 @@ export function phraseOf(row) {
 // right). Writes pick the shape of the operation.
 export function iconOf(row) {
   const detail = row.detail || {};
+  if (row.tool === 'read_research_bundle') return 'inbox';
+  if (row.tool === 'submit_pro_report') return 'fileText';
   switch (detail.kind) {
     case 'command': return 'squareTerminal';
     case 'write': {

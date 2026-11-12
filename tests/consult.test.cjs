@@ -7,6 +7,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const Ajv = require('ajv');
+const http = require('node:http');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
 test('consultation bridge: bounded reads, access checks, immutable reports and concurrent lock-free CLI', { skip: process.platform !== 'darwin', timeout: 45000 }, async t => {
@@ -29,6 +30,12 @@ test('consultation bridge: bounded reads, access checks, immutable reports and c
     const id = ++seq;
     pending.set(id, { resolve, timer: setTimeout(() => { pending.delete(id); reject(Error('RPC timeout: ' + stderr.slice(-1000))); }, 8000) });
     child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+  });
+  const dashboard = () => stderr.match(/\[Dashboard\] (http:\/\/[^\s]+)/)[1];
+  const request = (endpoint, options = {}) => new Promise((resolve, reject) => {
+    const req = http.request(new URL(endpoint, dashboard()), options, res => {
+      const chunks = []; res.on('data', b => chunks.push(b)); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }));
+    }); req.on('error', reject); req.end();
   });
   const schemas = new Map();
   const tool = async (name, args, error = false) => {
@@ -57,6 +64,19 @@ test('consultation bridge: bounded reads, access checks, immutable reports and c
       const second = spawnSync(exe, ['--mcp'], { env, input: '', encoding: 'utf8', timeout: 5000 });
       assert.notEqual(second.status, 0); assert.match(second.stderr, /owner|already|state|lock/i);
     });
+    await t.test('dashboard read endpoints do not create consultation state and support strong ETags', async () => {
+      assert(!fs.existsSync(consult));
+      for (const endpoint of ['/api/snapshot', '/api/native-status']) {
+        const first = await request(endpoint); assert.equal(first.status, 200); assert.deepEqual(JSON.parse(first.text).consults, []);
+        assert.equal(first.headers.etag, '"sha256-' + sha(Buffer.from(first.text)) + '"');
+        const unchanged = await request(endpoint, { headers: { 'If-None-Match': first.headers.etag } });
+        assert.equal(unchanged.status, 304); assert.equal(unchanged.headers.etag, first.headers.etag); assert.equal(unchanged.text, '');
+        assert.equal(unchanged.headers['content-length'], '0'); assert.equal(unchanged.headers['cache-control'], 'no-store');
+        assert.equal((await request(endpoint, { headers: { 'If-None-Match': '"wrong"' } })).status, 200);
+      }
+      assert.equal((await request('/api/consult-report?id=missing')).status, 404);
+      assert(!fs.existsSync(consult));
+    });
     let staged, report;
     await t.test('stage/status/list work while owner.lock is held', async () => {
       staged = cli(['--stage-consult', '--id', 'review-1', '--inbox', inbox, '--title', 'Test consultation', '--instructions', 'Evaluate evidence.', '--brief', brief, '--file', data]);
@@ -72,6 +92,14 @@ test('consultation bridge: bounded reads, access checks, immutable reports and c
       cli(['--stage-consult', '--id', 'missing', '--inbox', inbox, '--file', path.join(root, 'missing')], 1);
       cli(['--consult-status', '--wait-seconds', '3601'], 1);
     });
+    await t.test('consult feeds include staged metadata and a compact native representation', async () => {
+      const full = await request('/api/snapshot'), native = await request('/api/native-status');
+      const item = JSON.parse(full.text).consults.find(x => x.consult_id === 'review-1');
+      assert.equal(item.status, 'staged'); assert.equal(item.file_count, 2); assert.equal(item.bundle_sha256, staged.bundle_sha256);
+      assert.equal(item.instructions, 'Evaluate evidence.'); assert.equal(item.web_pro_prompt, staged.web_pro_prompt); assert.equal(item.receipt, null);
+      const compact = JSON.parse(native.text).consults.find(x => x.consult_id === 'review-1'); assert(!('instructions' in compact));
+      assert(Buffer.byteLength(native.text) < Buffer.byteLength(full.text));
+    });
     await t.test('bundle SHA, full-file facts, UTF-8 truncation and status', async () => {
       const read = await tool('read_research_bundle', { consult_id: 'review-1', max_bytes_per_file: 1024, total_max_bytes: 4096 });
       assert.equal(read.file_count, 2); assert.equal(read.bundle_sha256, staged.bundle_sha256); assert.equal(read.title, 'Test consultation'); assert.equal(read.instructions, 'Evaluate evidence.');
@@ -86,6 +114,31 @@ test('consultation bridge: bounded reads, access checks, immutable reports and c
       await tool('read_research_bundle', { paths: Array(21).fill(brief) }, true);
       const budget = await tool('read_research_bundle', { paths: [data, brief], max_bytes_per_file: 262144, total_max_bytes: 4096 }); assert(budget.total_bytes <= 4096); assert.equal(budget.truncated_count, 2);
       await tool('read_research_bundle', { consult_id: 'explicit-paths', paths: [brief] }); assert.equal(cli(['--consult-status', '--id', 'explicit-paths']).status, 'reading');
+    });
+    await t.test('byte-offset continuation preserves UTF-8 and full-file identities', async () => {
+      const original = fs.readFileSync(data); let offset = 0, chunks = [], pages = 0;
+      do {
+        const read = await tool('read_research_bundle', { paths: [data], file_offsets: { [data]: offset }, max_bytes_per_file: 1024 });
+        const f = read.files[0]; assert.equal(f.offset_bytes, offset); assert.equal(f.sha256, sha(original));
+        assert.equal(f.size_bytes, original.length); assert.equal(f.line_count, 2); assert(!f.content.includes('\ufffd'));
+        chunks.push(f.content); assert.equal(read.total_bytes, Buffer.byteLength(f.content));
+        assert.equal(f.next_offset_bytes, f.truncated ? offset + Buffer.byteLength(f.content) : 0);
+        if (f.truncated) assert(f.next_offset_bytes > offset);
+        offset = f.next_offset_bytes; assert(++pages < 20);
+      } while (offset);
+      assert.equal(chunks.join(''), original.toString('utf8')); assert(pages > 1);
+      const mid = (await tool('read_research_bundle', { paths: [data], file_offsets: { [data]: 1024 }, max_bytes_per_file: 1024 })).files[0];
+      assert.equal(mid.offset_bytes, 1026); assert.equal(mid.content, '中'.repeat(341)); assert.equal(mid.next_offset_bytes, 2049);
+      const normalizedKey = path.dirname(data) + '/./' + path.basename(data);
+      const normalized = (await tool('read_research_bundle', { paths: [data], file_offsets: { [normalizedKey]: 1026 } })).files[0];
+      assert.equal(normalized.offset_bytes, 1026);
+      for (const end of [original.length, original.length + 1000, Number.MAX_SAFE_INTEGER]) {
+        const f = (await tool('read_research_bundle', { paths: [data], file_offsets: { [data]: end } })).files[0];
+        assert.equal(f.content, ''); assert.equal(f.truncated, false); assert.equal(f.offset_bytes, original.length); assert.equal(f.next_offset_bytes, 0);
+        assert.equal(f.sha256, sha(original)); assert.equal(f.line_count, 2);
+      }
+      for (const invalid of [-1, 1.5, '1', true, null]) await tool('read_research_bundle', { paths: [data], file_offsets: { [data]: invalid } }, true);
+      await tool('read_research_bundle', { paths: [data], file_offsets: [] }, true);
     });
     await t.test('access boundary matches read_file: absolute paths, denied OS access and staged paths', async () => {
       await tool('read_research_bundle', { paths: ['relative.md'] }, true);
@@ -131,6 +184,55 @@ test('consultation bridge: bounded reads, access checks, immutable reports and c
       assert.notEqual(safe.receipt_path, reserved); assert.equal(fs.readFileSync(reserved, 'utf8'), 'preserve this receipt');
       const complete = cli(['--consult-status', '--id', 'review-1', '--wait-seconds', '1']); assert.equal(complete.status, 'completed'); assert(complete.receipt); assert.equal(cli(['--consult-status']).status, 'completed');
       const standalone = await tool('submit_pro_report', { inbox_dir: path.join(root, 'new-inbox'), content: '# Standalone' }); assert.match(standalone.consult_id, /^pro-\d{8}T\d{6}Z$/);
+    });
+    await t.test('report reader returns complete and bounded Markdown and rejects symlinks', async () => {
+      const receipt = cli(['--consult-status', '--id', 'review-1']).receipt;
+      const response = await request('/api/consult-report?id=review-1'); assert.equal(response.status, 200);
+      const body = JSON.parse(response.text); assert.equal(body.content, fs.readFileSync(receipt.report_path, 'utf8'));
+      assert.equal(body.sha256, receipt.sha256); assert.equal(body.byte_length, receipt.byte_length); assert.equal(body.truncated, false);
+      const full = JSON.parse((await request('/api/snapshot')).text);
+      assert.equal(full.consults.find(x => x.consult_id === 'review-1').status, 'completed');
+      assert.equal(full.consults.find(x => x.consult_id === 'review-1').receipt.report_path, receipt.report_path);
+      assert.equal((await request('/api/consult-report?id=review-1', { headers: { Origin: 'https://evil.example' } })).status, 403);
+      for (const id of ['missing', '../escape', '']) { const r = await request('/api/consult-report?id=' + encodeURIComponent(id)); assert.equal(r.status, 404); assert(JSON.parse(r.text).error); }
+      const original = fs.readFileSync(receipt.report_path); fs.unlinkSync(receipt.report_path); fs.symlinkSync(brief, receipt.report_path);
+      try { assert.equal((await request('/api/consult-report?id=review-1')).status, 404); }
+      finally { fs.unlinkSync(receipt.report_path); fs.writeFileSync(receipt.report_path, original); }
+      const big = 'x'.repeat(512 * 1024 - 1) + '中末尾';
+      await tool('submit_pro_report', { consult_id: 'large-report', inbox_dir: inbox, content: big });
+      const large = JSON.parse((await request('/api/consult-report?id=large-report')).text);
+      assert.equal(large.truncated, true); assert.equal(Buffer.byteLength(large.content), 512 * 1024 - 1); assert.equal(large.byte_length, Buffer.byteLength(big));
+      assert.equal(large.sha256, sha(Buffer.from(big))); assert(!large.content.includes('\ufffd'));
+      // A receipt-only session remains discoverable, and the feed is bounded/newest-first.
+      fs.unlinkSync(path.join(consult, 'sessions', 'large-report.json'));
+      assert(JSON.parse((await request('/api/native-status')).text).consults.some(x => x.consult_id === 'large-report'));
+      for (let i = 0; i < 22; i++) fs.writeFileSync(path.join(consult, 'sessions', 'feed-' + i + '.json'), JSON.stringify({ consult_id: 'feed-' + i, staged_at: new Date(Date.UTC(2099, 0, i + 1)).toISOString(), status: 'staged', paths: [brief] }));
+      const recent = JSON.parse((await request('/api/native-status')).text).consults;
+      assert.equal(recent.length, 20); assert.equal(recent[0].consult_id, 'feed-21'); assert.equal(recent[19].consult_id, 'feed-2');
+      for (let i = 0; i < 22; i++) fs.unlinkSync(path.join(consult, 'sessions', 'feed-' + i + '.json'));
+    });
+    await t.test('local restore requires same-origin token, previews, preserves modes and refuses conflicts', async () => {
+      const file = path.join(root, 'restore.sh'); fs.writeFileSync(file, 'before\n'); fs.chmodSync(file, 0o751);
+      await tool('write_file', { path: file, content: 'after\n', overwrite: true }); fs.chmodSync(file, 0o751);
+      const history = await tool('workspace_history', { path: root }); const change = history.changes.find(x => x.files.some(f => f.path === file)); assert(change);
+      const token = JSON.parse((await request('/api/local-actions')).text).token;
+      const headers = { Origin: dashboard().replace(/\/$/, ''), 'X-Workspace-Token': token };
+      const endpoint = '/api/restore-change?id=' + change.id;
+      assert.equal((await request(endpoint + '&apply=1')).status, 405);
+      assert.equal((await request(endpoint + '&apply=1', { method: 'POST' })).status, 403);
+      assert.equal((await request(endpoint + '&apply=1', { method: 'POST', headers: { ...headers, Origin: 'https://evil.example' } })).status, 403);
+      assert.equal((await request(endpoint + '&apply=1', { method: 'POST', headers: { ...headers, 'X-Workspace-Token': 'wrong' } })).status, 403);
+      assert.equal((await request(endpoint + '&apply=bad', { method: 'POST', headers })).status, 400);
+      assert.equal((await request('/api/restore-change?id=missing&apply=0', { method: 'POST', headers })).status, 400);
+      const preview = await request(endpoint + '&apply=0', { method: 'POST', headers }); assert.equal(preview.status, 200);
+      assert.equal(JSON.parse(preview.text).applied, false); assert.equal(JSON.parse(preview.text).action, 'undo'); assert.equal(JSON.parse(preview.text).count, 1);
+      assert.equal(fs.readFileSync(file, 'utf8'), 'after\n');
+      fs.writeFileSync(file, 'external\n'); const conflict = await request(endpoint + '&apply=1', { method: 'POST', headers });
+      assert.equal(conflict.status, 409); assert.match(JSON.parse(conflict.text).error, /UNDO_CONFLICT/); assert.equal(fs.readFileSync(file, 'utf8'), 'external\n');
+      fs.writeFileSync(file, 'after\n'); const applied = await request(endpoint + '&apply=1', { method: 'POST', headers });
+      assert.equal(applied.status, 200, applied.text); assert.equal(JSON.parse(applied.text).applied, true); assert.equal(fs.readFileSync(file, 'utf8'), 'before\n'); assert.equal(fs.statSync(file).mode & 0o777, 0o751);
+      assert.equal((await request(endpoint + '&apply=1', { method: 'POST', headers })).status, 409);
+      await tool('restore_change', { change_id: change.id, redo: true, apply: true }); assert.equal(fs.readFileSync(file, 'utf8'), 'after\n'); assert.equal(fs.statSync(file).mode & 0o777, 0o751);
     });
     await t.test('waiting CLI sees report completion without locking out MCP', async () => {
       cli(['--stage-consult', '--id', 'wait-1', '--inbox', inbox, '--file', brief]);

@@ -1,5 +1,12 @@
 # 版本升级说明
 
+## macOS 1.8.0 / build 16 · 2026-11-12
+
+- **全新 Conduit Vault 图标系统**：使用CoreGraphics 矢量生成的黑曜石钛金属应用图标与 `15×15pt`（`@2x` `30×30px`）菜单栏光学模板 `[ >_ ┐`，右下独立光标连通域像素级对齐 `MenuBarSignalView` 动态脉冲轨。
+- **科研咨询全链路可视化与大文件无损续读**：`read_research_bundle` 支持 `file_offsets` / `offset_bytes` / `next_offset_bytes` UTF-8 字节级续读分页（保持 25 个公开 MCP 工具不变）；原生侧新增一级页面“科研咨询”（含三阶段状态条、报告预览弹窗、复制 T3 回执及系统完成通知），网页工作台同步新增折叠式咨询状态带与内置 Markdown/公式报告阅读器。
+- **强 `ETag` / `304 Not Modified` 缓存与受保护还原**：`/api/snapshot` 与 `/api/native-status` 在无新状态变化时稳定签名并返回无正文 `304`；检查器为带 `change_id` 的文件修改增加同源 Token 保护的「还原」预览（`apply=0`）与 SHA-256 冲突拒绝（`UNDO_CONFLICT`）恢复入口。
+- **macOS 原生视觉与对比度收敛**：主窗口侧栏接入真实 `NSVisualEffectView(.sidebar)` 毛玻璃材质，状态栏面板拓宽至 `332pt` 并展示实时咨询胶囊与最近调用；合并 `dashboard.css` 重复色彩令牌并修复原生 WebView 注入脚本的次级字色对比度。
+
 ## macOS 1.7.0 / build 15 · 2026-11-12
 
 - 新增公开工具 `read_research_bundle` 与 `submit_pro_report`，共 25 个公开工具、5 个兼容旧名称。支持 T3 Code 暂存资料、ChatGPT Web Pro 阅读及完整报告回传。

@@ -13,8 +13,10 @@ final class MenuBarSignalView: NSView {
     private var running = false
     private var attention = false
     private var reduceMotion = false
+    private var consultActive = false
     private var occlusionObserver: NSObjectProtocol?
     private let blue = NSColor(srgbRed: 0.22, green: 0.48, blue: 1, alpha: 1)
+    private let teal = NSColor(srgbRed: 0.14, green: 0.72, blue: 0.68, alpha: 1)
 
     init() {
         let size = WorkspaceBrand.menuBarSize
@@ -34,9 +36,12 @@ final class MenuBarSignalView: NSView {
         // The baseline is a native 2pt capsule. Downsampling the artwork alone
         // makes this key identifying detail too thin, even at Retina scale.
         let underline = Self.underscoreBounds(bitmap)
-        accent.frame = CGRect(x: (underline.minX * 2).rounded(.down) / 2,
-                              y: 1, width: max(9, (underline.width * 2).rounded(.up) / 2), height: 2)
-        accent.backgroundColor = blue.cgColor; accent.cornerRadius = 1
+        let accentX = (underline.minX * 2).rounded(.down) / 2
+        let accentY = (underline.minY * 2).rounded(.down) / 2
+        let accentW = max(5.5, (underline.width * 2).rounded(.up) / 2)
+        let accentH = max(1.5, (underline.height * 2).rounded(.up) / 2)
+        accent.frame = CGRect(x: accentX, y: accentY, width: accentW, height: accentH)
+        accent.backgroundColor = blue.cgColor; accent.cornerRadius = accentH / 2
         layer?.addSublayer(accent)
 
         signal.frame = bounds; signal.mask = mask(); signal.opacity = 0
@@ -63,8 +68,8 @@ final class MenuBarSignalView: NSView {
         syncAnimation()
     }
     override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); updateTint() }
-    func update(running: Bool, attention: Bool, reduceMotion: Bool) {
-        self.running = running; self.attention = attention; self.reduceMotion = reduceMotion
+    func update(running: Bool, attention: Bool, reduceMotion: Bool, consultActive: Bool = false) {
+        self.running = running; self.attention = attention; self.reduceMotion = reduceMotion; self.consultActive = consultActive
         updateTint(); syncAnimation()
     }
     func stop() {
@@ -73,6 +78,7 @@ final class MenuBarSignalView: NSView {
     }
     private func updateTint() {
         imageView.contentTintColor = attention ? .systemOrange : .labelColor
+        accent.backgroundColor = (consultActive ? teal : blue).cgColor
     }
     private func syncAnimation() {
         let visible = window?.isVisible == true && window?.occlusionState.contains(.visible) == true && !isHiddenOrHasHiddenAncestor

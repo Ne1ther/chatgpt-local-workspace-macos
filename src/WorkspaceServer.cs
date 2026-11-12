@@ -145,7 +145,7 @@ static class WorkspaceServer
     static object[] BuildToolsInner()
     {
         return new[] {
-            Tool("read_research_bundle","Read a staged T3 Code consultation by consult_id, a JSON manifest/file at bundle_path, and/or explicit paths. Reads at most 20 files within byte budgets; SHA-256 identifies full file bytes, content may be truncated. Updates consultation read status only. Follow the bundle instructions and submit the complete report using submit_pro_report.",true,new Dictionary<string,object>{{"consult_id",Schema("string","Optional staged consultation ID")},{"bundle_path",Schema("string","Optional absolute JSON manifest/file path or inline JSON")},{"paths",new{type="array",maxItems=20,items=new{type="string"}}},{"max_bytes_per_file",new{type="integer",@default=65536,minimum=1024,maximum=262144}},{"total_max_bytes",new{type="integer",@default=393216,minimum=4096,maximum=1048576}}}),
+            Tool("read_research_bundle","Read a staged T3 Code consultation by consult_id, a JSON manifest/file at bundle_path, and/or explicit paths. Reads at most 20 files within byte budgets; SHA-256 identifies full file bytes, content may be truncated. Updates consultation read status only. Follow the bundle instructions and submit the complete report using submit_pro_report.",true,new Dictionary<string,object>{{"consult_id",Schema("string","Optional staged consultation ID")},{"bundle_path",Schema("string","Optional absolute JSON manifest/file path or inline JSON")},{"paths",new{type="array",maxItems=20,items=new{type="string"}}},{"file_offsets",new{type="object",description="Optional map of absolute file path to non-negative byte offset for paginated reading of large files",additionalProperties=new{type="integer",minimum=0}}},{"max_bytes_per_file",new{type="integer",@default=65536,minimum=1024,maximum=262144}},{"total_max_bytes",new{type="integer",@default=393216,minimum=4096,maximum=1048576}}}),
             Tool("submit_pro_report","Save a complete Markdown consultation report in the staged inbox or explicit inbox_dir. Identical reports are idempotent; differing content uses a new timestamped filename and never overwrites prior files. Returns report, receipt, optional structured JSON paths and SHA-256; completes the T3 Code consultation.",false,new Dictionary<string,object>{{"content",new{type="string",minLength=1}},{"consult_id",new{type="string",pattern="^[A-Za-z0-9._-]{1,80}$"}},{"inbox_dir",Schema("string","Absolute inbox directory; optional for a staged consult_id")},{"title",Schema("string","Optional report title")},{"summary",Schema("string","Optional concise summary")},{"structured_json",Schema("string","Optional valid JSON text saved beside the Markdown report")}},"content"),
             Tool("register_conversation","Name or configure a conversation, or register it when host session metadata is absent. title defaults to the directory name. chat_id must be an actual known ChatGPT /c/ UUID; omit it otherwise. Use the returned thread_id for clients without host session metadata.",false,new Dictionary<string,object>{{"title",Schema("string","Optional human-readable conversation/task title, 1..120 characters; omit to auto-derive from the workspace directory name")},{"path",Schema("string","Absolute workspace directory")},{"chat_id",Schema("string","Actual known ChatGPT chat UUID, optional; never guess")}},"path"),
             Tool("open_workspace","Open a workspace before coding: discover scoped AGENTS.override.md/AGENTS.md guidance, Git root, standalone skill paths, available shells and current plan. The local desktop app watches subsequent tools, plans and commands automatically. Read nested guidance again when changing directory scope. Does not grant extra permissions.",true,new Dictionary<string,object>{{"path",Schema("string","Absolute working directory")}},"path"),
@@ -267,7 +267,7 @@ static class WorkspaceServer
         if(name=="check_task_completion")return Result(WorkspaceTasks.Review(Full(S(a,"path")),CurrentThread??"unassigned"));
         if(name=="apply_patch")return Result(PatchEditor.Apply(Full(S(a,"cwd")),S(a,"patch")));
         if(name=="workspace_history")return Result(WorkspaceJournal.History(Full(S(a,"path")),CurrentThread??"unassigned"));
-        if(name=="restore_change")return Result(WorkspaceJournal.Restore(S(a,"change_id"),CurrentThread??"unassigned",Flag(a,"redo"),Flag(a,"apply")));
+        if(name=="restore_change")return Result(RestoreChange(S(a,"change_id"),CurrentThread??"unassigned",Flag(a,"redo"),Flag(a,"apply")));
         if(name=="list_commands"){var list=CommandList();return Result(new{commands=list,count=list.Length});}
         if(name=="read_command"&&(a.ContainsKey("offset")||a.ContainsKey("length")))return Result(Snapshot(S(a,"session_id"),WaitTime(a,0),false,false,Flag(a,"include_full_output"),N(a,"offset",0,int.MinValue,int.MaxValue),N(a,"length",8000,1,32000)));
         if(name=="read_command")return Result(Snapshot(S(a,"session_id"),WaitTime(a,0),false,false,Flag(a,"include_full_output")));
@@ -324,11 +324,32 @@ static class WorkspaceServer
         if(name=="poll_command"){object v;return Result(Snapshot(S(a,"session_id"),N(a,"yield_ms",1000,0,10000),a.TryGetValue("stop",out v)&&Convert.ToBoolean(v),true,Flag(a,"include_full_output")));}
         throw new ArgumentException("Unknown tool: "+name);
     }
+    static object RestoreChange(string id,string thread,bool redo,bool apply)
+    {
+#if MACOS
+        // Atomic journal writes replace inodes; retain the current POSIX mode of each existing file.
+        var preview=Json.Deserialize<Dictionary<string,object>>(Json.Serialize(WorkspaceJournal.Restore(id,thread,redo,false)));
+        if(!apply)return preview;
+        var modes=new Dictionary<string,UnixFileMode>(WorkspaceContext.PathComparer);
+        foreach(var item in (System.Collections.IList)preview["files"]){string path=Full(S((Dictionary<string,object>)item,"path"));WorkspaceJournal.SafePath(path);if(File.Exists(path))modes[path]=File.GetUnixFileMode(path);}
+        try{return WorkspaceJournal.Restore(id,thread,redo,true);}
+        finally{foreach(var pair in modes){WorkspaceJournal.SafePath(pair.Key);if(File.Exists(pair.Key))File.SetUnixFileMode(pair.Key,pair.Value);}}
+#else
+        return WorkspaceJournal.Restore(id,thread,redo,apply);
+#endif
+    }
+    static object RestoreLocalChange(string id,bool apply)
+    {
+        // Serialize local restores with MCP writes, preserving the recorded conversation context.
+        var completion=new System.Threading.Tasks.TaskCompletionSource<object>();
+        if(!Work.TryAdd(()=>{string previous=CurrentThread;try{CurrentThread=WorkspaceJournal.ThreadForChange(id);completion.SetResult(RestoreChange(id,CurrentThread,false,apply));}catch(Exception ex){completion.SetException(ex);}finally{CurrentThread=previous;}}))throw new IOException("Workspace is busy; retry the restore");
+        return completion.Task.GetAwaiter().GetResult();
+    }
     static object NativeSnapshot()
     {
         object[] commands;
         lock(CommandsGate)commands=Commands.Values.Select(c=>new{running=!c.Process.HasExited}).ToArray();
-        return new{version=Version,activity=WorkspaceActivity.ReadNative(),conversations=WorkspaceThreads.List(),commands=commands};
+        return new{version=Version,activity=WorkspaceActivity.ReadNative(),conversations=WorkspaceThreads.List(),commands=commands,consults=WorkspaceConsult.DashboardList(true)};
     }
     static object LiveSnapshot(Dictionary<string,object> args, bool local=false)
     {
@@ -337,7 +358,7 @@ static class WorkspaceServer
         WorkspaceActivity.Seen(S(args,"viewer_id"),path,S(args,"bridge","standard"),S(args,"display_mode","unknown"));
         var commands=new List<object>();int omitted=0;
         lock(CommandsGate){var selected=Commands.Where(x=>!x.Value.LogsCleared&&WorkspaceActivity.Within(Presentation.DisplayPath(x.Value.Cwd).TrimEnd('/'),path)&&(thread.Length==0||x.Value.ThreadId==thread)).OrderBy(x=>x.Value.Process.HasExited).ThenByDescending(x=>x.Value.Started).ToArray();omitted=Math.Max(0,selected.Length-8);foreach(var pair in selected.Take(8)){var c=pair.Value;lock(c.Gate){bool done=c.Process.HasExited;int start=Math.Max(0,c.History.Length-8000);commands.Add(new{thread_id=c.ThreadId,started_at=c.Started.ToString("o"),session_id=pair.Key,command=c.Text,cwd=Presentation.DisplayPath(c.Cwd),shell=c.Shell,running=!done,exit_code=done?(int?)c.Process.ExitCode:null,elapsed_seconds=Math.Round(((done?c.Process.ExitTime.ToUniversalTime():DateTime.UtcNow)-c.Started).TotalSeconds,1),output=c.History.ToString(start,c.History.Length-start),truncated=c.HistoryTruncated||start>0,timed_out=c.TimedOut,stopped=c.Stopped});}}}
-        return new{version=Version,instance_id=InstanceId,dashboard_url=LocalDashboard.Url,conversations=WorkspaceThreads.List(RunningCommandsFor),thread_id=thread,path=path,checked_at=DateTime.UtcNow.ToString("o"),default_shell=WorkspaceContext.DefaultShell,activity=WorkspaceActivity.Read(path,thread,!local),plans=WorkspaceContext.PlansWithin(path,thread),commands=commands,omitted_commands=omitted,queued_calls=Work.Count,ui=WorkspaceActivity.Diagnostics(path),scope="仅当前 MCP 进程与此目录及子目录。没有工具调用不代表模型已完成；模型思考不可见。历史上限 100 条，命令输出为尾部快照；每条调用附带有界的结构化详情。"};
+        return new{version=Version,instance_id=InstanceId,dashboard_url=LocalDashboard.Url,conversations=WorkspaceThreads.List(RunningCommandsFor),thread_id=thread,path=path,checked_at=DateTime.UtcNow.ToString("o"),default_shell=WorkspaceContext.DefaultShell,activity=WorkspaceActivity.Read(path,thread,!local),plans=WorkspaceContext.PlansWithin(path,thread),commands=commands,consults=local?WorkspaceConsult.DashboardList(false):null,omitted_commands=omitted,queued_calls=Work.Count,ui=WorkspaceActivity.Diagnostics(path),scope="仅当前 MCP 进程与此目录及子目录。没有工具调用不代表模型已完成；模型思考不可见。历史上限 100 条，命令输出为尾部快照；每条调用附带有界的结构化详情。"};
     }
     static Dictionary<string,object> PrepareCall(Dictionary<string,object> call)
     {
@@ -507,7 +528,7 @@ static class WorkspaceServer
     public static void Run()
     {
         string stateRoot=WorkspaceStore.Root;Console.Error.WriteLine("[Workspace] persistent state: "+stateRoot);
-        using(var dashboard=new LocalDashboard(thread=>LiveSnapshot(new Dictionary<string,object>{{"thread_id",thread}},true),NativeSnapshot,ClearLogs))
+        using(var dashboard=new LocalDashboard(thread=>LiveSnapshot(new Dictionary<string,object>{{"thread_id",thread}},true),NativeSnapshot,ClearLogs,RestoreLocalChange))
         using(var input=new StreamReader(Console.OpenStandardInput(),Utf8))using(var output=new StreamWriter(Console.OpenStandardOutput(),Utf8){AutoFlush=true}) {
             var worker=System.Threading.Tasks.Task.Run(()=>{foreach(var action in Work.GetConsumingEnumerable())action();});
             string line;try{while((line=input.ReadLine())!=null){object id=null;try{

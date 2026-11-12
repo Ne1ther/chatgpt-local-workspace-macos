@@ -25,14 +25,37 @@ struct ContentView: View {
         })
     }
 
+    private var isShowingWorkbenchDetail: Bool {
+        store.destination == .workbench && (!store.selectedThreadID.isEmpty || store.showsAllActivity) && store.dashboardURL != nil
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if sidebarVisible {
             VStack(spacing: 0) {
                 List(selection: selection) {
                     ForEach(Destination.allCases) { item in
-                        Label { Text(item.rawValue).foregroundStyle(selectionColor(pageSelected(item))) } icon: {
-                            sidebarSymbol(item.symbol, color: item == .overview ? .indigo : item == .workbench ? .blue : item == .activity ? .purple : .secondary,
+                        Label {
+                            HStack(spacing: 6) {
+                                Text(item.rawValue)
+                                    .foregroundStyle(selectionColor(pageSelected(item)))
+                                Spacer(minLength: 4)
+                                if item == .consult && store.activeConsultCount > 0 {
+                                    Text("\(store.activeConsultCount)")
+                                        .font(.caption2.weight(.semibold).monospacedDigit())
+                                        .foregroundStyle(pageSelected(item) && controlActiveState != .inactive ? .white : WorkspacePalette.teal)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 1.5)
+                                        .background(
+                                            (pageSelected(item) && controlActiveState != .inactive
+                                             ? Color.white.opacity(0.24)
+                                             : WorkspacePalette.teal.opacity(0.16)),
+                                            in: Capsule()
+                                        )
+                                }
+                            }
+                        } icon: {
+                            sidebarSymbol(item.symbol, color: item == .overview ? .indigo : item == .workbench ? .blue : item == .consult ? .teal : item == .activity ? .purple : .secondary,
                                           selected: pageSelected(item))
                         }
                         .tag(item == .workbench ? SidebarSelection.conversation("") : .page(item))
@@ -41,7 +64,7 @@ struct ContentView: View {
                 .listStyle(.sidebar)
                 .scrollDisabled(true)
                 .scrollContentBackground(.hidden)
-                .frame(height: 194)
+                .frame(height: 232)
                 Divider().padding(.horizontal, 16)
                 // Project scrolling never displaces the fixed primary navigation.
                 List(selection: selection) {
@@ -110,8 +133,9 @@ struct ContentView: View {
                 .padding(18)
             }
             .frame(width: 256)
-            .background(WorkspacePalette.sidebar)
+            .background(SidebarVibrancyView().ignoresSafeArea())
             .transition(.move(edge: .leading).combined(with: .opacity))
+            Divider()
             }
             VStack(spacing: 0) {
                 if let issue = store.issue { issueBanner(issue) }
@@ -121,14 +145,38 @@ struct ContentView: View {
             .background(WorkspacePalette.page)
             .navigationTitle((store.destination ?? .overview).rawValue)
             .toolbar {
-                ToolbarItem(placement: .navigation) {
+                ToolbarItemGroup(placement: .navigation) {
                     Button {
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { sidebarVisible.toggle() }
                     } label: { Label("显示或隐藏侧栏", systemImage: "sidebar.left") }
                     .keyboardShortcut("s", modifiers: [.command, .option])
                     .help("显示或隐藏侧栏（⌥⌘S）")
+
+                    if isShowingWorkbenchDetail {
+                        Button {
+                            store.selectConversation("")
+                        } label: {
+                            Label("返回目录", systemImage: "chevron.left")
+                        }
+                        .help("返回工作目录")
+                    }
                 }
                 ToolbarItemGroup(placement: .primaryAction) {
+                    if isShowingWorkbenchDetail {
+                        Button {
+                            store.dashboardSession.sendCommand("toggle-search")
+                        } label: {
+                            Label("搜索筛选", systemImage: "magnifyingglass")
+                        }
+                        .help("搜索与筛选操作记录")
+
+                        Button {
+                            store.dashboardSession.sendCommand("toggle-inspector")
+                        } label: {
+                            Label("切换检查器", systemImage: "sidebar.right")
+                        }
+                        .help("显示或隐藏右侧检查器")
+                    }
                     Button { store.openBrowser() } label: {
                         Label("在浏览器打开", systemImage: "safari")
                     }
@@ -198,21 +246,12 @@ struct ContentView: View {
         case .overview: WorkspaceHomeView(store: store)
         case .workbench:
             if store.selectedThreadID.isEmpty && !store.showsAllActivity {
-                    WorkspaceLibraryView(store: store)
+                WorkspaceLibraryView(store: store)
             } else if let url = store.dashboardURL {
-                    VStack(spacing: 0) {
-                        if store.showsAllActivity {
-                            HStack {
-                                Button("工作目录", systemImage: "chevron.left") { store.selectConversation("") }
-                                    .buttonStyle(.plain)
-                                Spacer()
-                            }.font(.callout).padding(.horizontal, 24).padding(.vertical, 10)
-                        }
-                    DashboardView(session: store.dashboardSession, url: url, revision: store.dashboardRevision)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .onAppear { store.dashboardSession.setVisible(true) }
-                        .onDisappear { store.dashboardSession.setVisible(false) }
-                    }
+                DashboardView(session: store.dashboardSession, url: url, revision: store.dashboardRevision)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onAppear { store.dashboardSession.setVisible(true) }
+                    .onDisappear { store.dashboardSession.setVisible(false) }
             } else {
                 ContentUnavailableView {
                     Label(store.state == .connected ? "等待首次调用" : "工作台尚未启动", systemImage: "rectangle.3.group")
@@ -225,6 +264,7 @@ struct ContentView: View {
                         .disabled(store.running || store.busy)
                 }
             }
+        case .consult: ConsultCockpitView(store: store)
         case .activity: ActivityView(store: store)
         case .access: LocalCapabilitiesView(store: store)
         case .logs: LogsView(store: store)

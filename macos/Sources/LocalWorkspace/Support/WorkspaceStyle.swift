@@ -35,6 +35,23 @@ enum WorkspaceStyle {
     static let cornerRadius: CGFloat = 14
 }
 
+struct SidebarVibrancyView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        view.isEmphasized = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = .sidebar
+        nsView.blendingMode = .behindWindow
+        nsView.state = .followsWindowActiveState
+    }
+}
+
 struct WorkspaceSymbol: View {
     let name: String
     var size: CGFloat = 36

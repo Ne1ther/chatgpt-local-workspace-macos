@@ -1,11 +1,11 @@
 # 生产资源来源
 
-本文记录 macOS 1.6.1 / 核心 2.4.1 源码所需的图形来源。候选库、生成式参考图、视觉对照和本机状态截图不属于本次源码发布内容。
+本文记录 macOS 1.8.0 / 核心 2.4.1 源码所需的图形来源。候选库、生成式参考图、视觉对照和本机状态截图不属于本次源码发布内容。
 
 ## 应用与菜单栏图标
 
-- 当前打包母版：`macos/Resources/Brand/InterlaceApp.png`、`macos/Resources/Brand/InterlaceMenuOptical.png`。
-- 这些是经 ImageGen 调整的专用应用及透明菜单栏母版，由 `scripts/generate_icons.swift` 使用 AppKit 打包；构建输出为 `macos/Resources/AppIcon.png`、`AppIcon.icns` 及两种密度的 `MenuBarIconTemplate*.png`。
+- 当前打包母版：`macos/Resources/Brand/InterlaceApp.png`、`macos/Resources/Brand/InterlaceMenuOptical.png`（Conduit Vault `[ >_ ┐` 几何体系，使用 CoreGraphics 矢量渲染）。
+- 由 `scripts/generate_icons.swift` 使用 AppKit 打包；构建输出为 `macos/Resources/AppIcon.png`、`AppIcon.icns` 及 `15×15pt`（`@2x` `30×30px`）光学字高的 `MenuBarIconTemplate*.png`。
 - 旧版 `InterlaceMenu.png`、概念图和对照图不参与当前应用打包。应用图标不代表 OpenAI 官方产品，网页插件图标也不会随本机资源自动更新。
 
 ## Phosphor 工作台图形

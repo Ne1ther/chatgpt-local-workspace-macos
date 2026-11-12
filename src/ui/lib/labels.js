@@ -10,6 +10,7 @@ export const TOOL_TITLES = {
   poll_command: '读取输出', get_workspace_status: '工作区状态', render_workspace: '打开面板',
   read_workspace_activity: '同步活动', stop_command: '停止命令', read_image: '查看图片',
   create_directory: '新建目录', show_changes: '工具改动',
+  read_research_bundle: '读取研究资料包', submit_pro_report: '归档 Pro 报告',
 };
 
 export const STATES = { running: '进行中', failed: '失败', returned: '已返回' };

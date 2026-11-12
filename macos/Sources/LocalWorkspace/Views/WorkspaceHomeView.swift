@@ -31,6 +31,9 @@ struct WorkspaceHomeView: View {
                     }
                 }.controlSize(.large)
                 WorkspaceAdviceView(store: store)
+                if !store.consults.isEmpty {
+                    consultSummaryCard
+                }
                 VStack(alignment: .leading, spacing: 15) {
                     HStack {
                         Text(store.activeWorkCount > 0 ? "正在进行" : "最近操作").font(.headline)
@@ -67,6 +70,43 @@ struct WorkspaceHomeView: View {
         }
         .background(WorkspacePalette.page)
     }
+
+    private var consultSummaryCard: some View {
+        let latestConsult = store.consults.first
+        return HStack(spacing: 14) {
+            WorkspaceSymbol(name: "sparkles.rectangle.stack", size: 36)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text("科研咨询").font(.headline)
+                    Text(store.activeConsultCount > 0 ? "\(store.activeConsultCount) 项进行中" : "共 \(store.consults.count) 项")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(store.activeConsultCount > 0 ? WorkspacePalette.teal : .secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(
+                            (store.activeConsultCount > 0 ? WorkspacePalette.teal.opacity(0.14) : Color.secondary.opacity(0.10)),
+                            in: Capsule()
+                        )
+                }
+                if let latestConsult {
+                    Text("\(latestConsult.title.isEmpty ? latestConsult.consultId : latestConsult.title) · \(latestConsult.statusLabel)")
+                        .font(.caption)
+                        .foregroundStyle(WorkspacePalette.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 12)
+            Button("查看科研咨询", systemImage: "arrow.right") {
+                store.destination = .consult
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+        }
+        .padding(18)
+        .background(WorkspacePalette.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(WorkspacePalette.border))
+    }
+
     private var primaryTitle: String { store.busy ? (store.state == .local ? "正在检查" : store.state == .starting ? "正在连接" : "正在保存") : store.running ? "查看工作台" : store.canConnect ? "连接 ChatGPT" : "设置连接" }
     private func primaryAction() {
         if store.running { store.selectConversation("") }

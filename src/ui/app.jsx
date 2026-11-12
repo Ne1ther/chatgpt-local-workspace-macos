@@ -4,6 +4,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DiagnosticsDialog } from './components/diagnostics-dialog.jsx';
 import { Header } from './components/header.jsx';
 import { PlanCard } from './components/plan-card.jsx';
+import { ConsultCard } from './components/consult-card.jsx';
 import { Sidebar } from './components/sidebar.jsx';
 import { Filters, Skeleton, Timeline } from './components/timeline.jsx';
 import { ChangesCard } from './components/changes-card.jsx';
@@ -61,7 +62,10 @@ export function App() {
   const [clearing, setClearing] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [pageVisible, setPageVisible] = useState(() => !document.hidden);
+  const [syncedAt, setSyncedAt] = useState('');
   const visibleRef = useRef(true);
+  // Last ETag per thread key: steady polling of an unchanged thread costs a 304 and no render.
+  const etagsRef = useRef({}), loadedThreadRef = useRef(null), commandRef = useRef({});
   // Keep sidebar metadata while a different conversation loads, but never its content.
   const metadata = loadedSnapshot ? loadedSnapshot.value : null;
   const snapshot = loadedSnapshot && loadedSnapshot.thread === thread ? loadedSnapshot.value : null;
@@ -87,14 +91,29 @@ export function App() {
     const abort = new AbortController();
     requestRef.current = abort;
     const timeout = setTimeout(() => abort.abort(), 8000);
+    // Explicit refreshes, retries and thread switches (force) always fetch a full body.
+    const key = filter || '*';
+    if (force) delete etagsRef.current[key];
+    const etag = !force && loadedThreadRef.current === filter ? etagsRef.current[key] : '';
     try {
-      const response = await fetch(snapshotUrl(filter), { signal: abort.signal, cache: 'no-store' });
+      const response = await fetch(snapshotUrl(filter), { signal: abort.signal, cache: 'no-store', headers: etag ? { 'If-None-Match': etag } : undefined });
+      if (response.status === 304) {
+        // Unchanged: keep the rendered snapshot, only note the sync. No body read, no setSnapshot.
+        if (own !== epochRef.current || requestRef.current !== abort) return;
+        setSyncedAt(new Date().toISOString());
+        setError('');
+        return;
+      }
       const value = await readJson(response);
       if (!response.ok) throw failure(value, response, '连接失败');
       if (own !== epochRef.current || requestRef.current !== abort) return;
       if (instanceRef.current && instanceRef.current !== value.instance_id) throw Error('服务实例已改变，请重新打开工作台。');
       instanceRef.current = value.instance_id;
+      const next = response.headers.get('ETag');
+      if (next) etagsRef.current[key] = next; else delete etagsRef.current[key];
+      loadedThreadRef.current = filter;
       setLoadedSnapshot({ thread: filter, value });
+      setSyncedAt(new Date().toISOString());
       setError('');
     } catch (caught) {
       if (own === epochRef.current && requestRef.current === abort) setError(caught.name === 'AbortError' ? '连接超时' : caught.message);
@@ -130,6 +149,12 @@ export function App() {
     };
     const onNativeVisible = event => { visibleRef.current = event.detail === true; onVisible(); };
     const onSetup = () => setSetupOpen(true);
+    // The native macOS toolbar drives the page: { action: 'toggle-search' | 'toggle-inspector' | 'toggle-pause' | 'refresh' }.
+    const onCommand = event => {
+      const action = typeof event.detail === 'string' ? event.detail : event.detail?.action;
+      const run = Object.prototype.hasOwnProperty.call(commandRef.current, action) ? commandRef.current[action] : null;
+      if (run) run();
+    };
     // Ctrl+F or "/" opens the search; Esc closes an empty search.
     const onKey = event => {
       const typing = /^(INPUT|TEXTAREA)$/.test(event.target.tagName);
@@ -144,7 +169,8 @@ export function App() {
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('workspace-visibility', onNativeVisible);
     window.addEventListener('workspace-setup', onSetup);
-    return () => { window.removeEventListener('resize', onResize); window.removeEventListener('hashchange', onHash); window.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('workspace-visibility', onNativeVisible); window.removeEventListener('workspace-setup', onSetup); clearTimeout(copiedRef.current); clearTimeout(noticeRef.current); clearTimeout(flashRef.current); };
+    window.addEventListener('workspace-command', onCommand);
+    return () => { window.removeEventListener('workspace-command', onCommand); window.removeEventListener('resize', onResize); window.removeEventListener('hashchange', onHash); window.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('workspace-visibility', onNativeVisible); window.removeEventListener('workspace-setup', onSetup); clearTimeout(copiedRef.current); clearTimeout(noticeRef.current); clearTimeout(flashRef.current); };
   }, []);
 
   // Clock ticks update live labels without rebuilding/filtering the entire activity model.
@@ -282,6 +308,10 @@ export function App() {
     copiedRef.current = setTimeout(() => setCopied(false), 1500);
   };
 
+  commandRef.current = {
+    'toggle-search': toggleSearch, 'toggle-inspector': toggleInspector, 'toggle-pause': togglePause, refresh: () => loadRef.current(true),
+  };
+
   const toggleSidebar = () => { setCollapsed(!collapsed); store('workspace-sidebar-collapsed', !collapsed); };
   const streamBody = snapshot
     ? <>
@@ -308,13 +338,14 @@ export function App() {
               startedAt={snapshot ? startedAt : undefined} lastAt={lastAt} now={now} calls={snapshot ? rows.length : 0}
               counts={counts} changes={changes} files={files.length}
               queued={snapshot ? snapshot.queued_calls || 0 : 0} connection={connection} state={connectionState}
-              synced={snapshot ? clock(snapshot.checked_at) : ''}
+              synced={snapshot ? clock(syncedAt || snapshot.checked_at) : ''}
               paused={paused} onPause={togglePause} onRefresh={() => loadRef.current(true)} onDiagnostics={() => setDiagnosticsOpen(true)}
               onClear={() => setConfirmOpen(true)} clearing={clearing}
               searchOpen={searchOpen || !!query || !!state} onSearch={toggleSearch} inspector={inspector && rows.length > 0} onInspector={toggleInspector}
               sidebarCollapsed={collapsed} sidebarRail={native || viewport <= RAIL_MAX} onSidebar={toggleSidebar} />
             <PlanCard plans={snapshot ? snapshot.plans || [] : []} grouped={!thread} threadName={threadName}
               open={planOpen} onToggle={() => { setPlanOpen(!planOpen); store('workspace-plan-open', !planOpen); }} />
+            <ConsultCard snapshot={snapshot} thread={thread} threadName={threadName} onNotice={text => say(text, 'error')} />
             {searchOpen || query || state
               ? <Filters query={query} onQuery={setQuery} state={state} onState={setState} shown={visible.length} total={rows.length} inputRef={searchRef}
                   onClose={() => { if (!query) toggleSearch(); }} />
@@ -331,7 +362,8 @@ export function App() {
           </div>
           {inspector && rows.length
             ? <DetailPane row={selected} now={now} snapshot={snapshot} onCopy={copySelected} copied={copied} onClose={toggleInspector}
-                width={Math.max(INSPECTOR_MIN, Math.min(inspectorWidth, viewport - (native ? 0 : collapsed || viewport <= RAIL_MAX ? 52 : 260) - 480))} onResize={resizeInspector} docked={docked} />
+                width={Math.max(INSPECTOR_MIN, Math.min(inspectorWidth, viewport - (native ? 0 : collapsed || viewport <= RAIL_MAX ? 52 : 260) - 480))} onResize={resizeInspector} docked={docked}
+                onNotice={text => say(text)} onRefresh={() => loadRef.current(true)} />
             : null}
         </main>
       </div>

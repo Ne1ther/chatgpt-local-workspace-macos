@@ -10,20 +10,23 @@ using System.Web.Script.Serialization;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 // Loopback view plus an explicit, same-origin Windows reveal action. Never execute files.
 sealed class LocalDashboard : IDisposable
 {
-    readonly TcpListener listener; readonly Func<string,object> snapshot;readonly Func<object> clearLogs; readonly SemaphoreSlim slots=new SemaphoreSlim(8); bool stopped;
+    readonly TcpListener listener; readonly Func<string,object> snapshot;readonly Func<object> clearLogs;readonly Func<string,bool,object> restoreChange; readonly SemaphoreSlim slots=new SemaphoreSlim(8); bool stopped;
     [ThreadStatic] static JavaScriptSerializer jsonInstance;
     // Reused per pool thread; the snapshot endpoint is polled ~1/sec per open dashboard.
     static JavaScriptSerializer Json { get { var j=jsonInstance; if(j==null){ j=new JavaScriptSerializer{MaxJsonLength=8*1024*1024}; jsonInstance=j; } return j; } }
     public static string Url="";
     readonly string actionToken=Guid.NewGuid().ToString("N");
     readonly Func<object> nativeSnapshot;
-    public LocalDashboard(Func<string,object> getSnapshot,Func<object> getNativeSnapshot=null,Func<object> clearCompletedLogs=null)
+    readonly object snapshotGate=new object();
+    readonly Dictionary<string,Tuple<string,byte[]>> snapshotCache=new Dictionary<string,Tuple<string,byte[]>>();
+    public LocalDashboard(Func<string,object> getSnapshot,Func<object> getNativeSnapshot=null,Func<object> clearCompletedLogs=null,Func<string,bool,object> restoreRecordedChange=null)
     {
-        snapshot=getSnapshot;nativeSnapshot=getNativeSnapshot;clearLogs=clearCompletedLogs;listener=new TcpListener(IPAddress.Loopback,0);listener.Start();Url="http://127.0.0.1:"+((IPEndPoint)listener.LocalEndpoint).Port+"/";
+        snapshot=getSnapshot;nativeSnapshot=getNativeSnapshot;clearLogs=clearCompletedLogs;restoreChange=restoreRecordedChange;listener=new TcpListener(IPAddress.Loopback,0);listener.Start();Url="http://127.0.0.1:"+((IPEndPoint)listener.LocalEndpoint).Port+"/";
         Task.Run(async()=>{while(!stopped){TcpClient client;try{client=await listener.AcceptTcpClientAsync();}catch{break;}if(!slots.Wait(0)){client.Close();continue;}ThreadPool.QueueUserWorkItem(_=>{try{Serve(client);}finally{client.Close();slots.Release();}});}});
         Console.Error.WriteLine("[Dashboard] "+Url);
     }
@@ -37,11 +40,19 @@ sealed class LocalDashboard : IDisposable
             if(!headers.TryGetValue("Host",out host)||host!=baseUri.Authority||(headers.TryGetValue("Origin",out origin)&&origin!=Url.TrimEnd('/'))||(headers.TryGetValue("Sec-Fetch-Site",out site)&&site!="same-origin"&&site!="none")){Send(stream,403,"text/plain","Local same-origin access only");return;}
             if(first.Length!=3){Send(stream,400,"text/plain","Invalid request");return;}
             Uri uri;if(!Uri.TryCreate(baseUri,first[1],out uri)||uri.Authority!=baseUri.Authority){Send(stream,400,"text/plain","Invalid target");return;}
-            if(uri.AbsolutePath=="/api/open"||uri.AbsolutePath=="/api/clear-logs"||uri.AbsolutePath=="/api/check-access")
+            if(uri.AbsolutePath=="/api/open"||uri.AbsolutePath=="/api/clear-logs"||uri.AbsolutePath=="/api/check-access"||uri.AbsolutePath=="/api/restore-change")
             {
                 string token;
                 if(first[0]!="POST"){Send(stream,405,"text/plain","POST only");return;}
                 if(!headers.TryGetValue("Origin",out origin)||origin!=Url.TrimEnd('/')||!headers.TryGetValue("X-Workspace-Token",out token)||token!=actionToken){Send(stream,403,"application/json",Json.Serialize(new{error=uri.AbsolutePath=="/api/clear-logs"?"请从本地工作台操作。":"请从本地工作台点击路径。"}));return;}
+                if(uri.AbsolutePath=="/api/restore-change"){
+                    string apply=Query(uri,"apply");
+                    if(apply!="0"&&apply!="1"){Send(stream,400,"application/json",Json.Serialize(new{error="apply must be 0 or 1"}));return;}
+                    if(restoreChange==null){Send(stream,503,"application/json",Json.Serialize(new{error="Restore is unavailable"}));return;}
+                    try{Send(stream,200,"application/json",Json.Serialize(restoreChange(Query(uri,"id"),apply=="1")));}
+                    catch(Exception ex){if(!(ex is ArgumentException||ex is IOException||ex is UnauthorizedAccessException))throw;Send(stream,ex is IOException?409:400,"application/json",Json.Serialize(new{error=ex.Message}));}
+                    return;
+                }
                 if(uri.AbsolutePath=="/api/check-access") {
                     string write=Query(uri,"write");
                     if(write!=""&&write!="0"&&write!="1"){Send(stream,400,"application/json","{\"error\":\"Invalid write check flag\"}");return;}
@@ -65,7 +76,11 @@ sealed class LocalDashboard : IDisposable
             }
             else if(uri.AbsolutePath=="/api/local-actions")Send(stream,200,"application/json",Json.Serialize(new{token=actionToken}));
             else if(uri.AbsolutePath=="/api/diagnostics")Send(stream,200,"application/json",Json.Serialize(WorkspaceDiagnostics.Read()));
-            else if(uri.AbsolutePath=="/api/native-status"&&nativeSnapshot!=null)Send(stream,200,"application/json",Json.Serialize(nativeSnapshot()));
+            else if(uri.AbsolutePath=="/api/native-status"&&nativeSnapshot!=null)SendSnapshot(stream,headers,nativeSnapshot());
+            else if(uri.AbsolutePath=="/api/consult-report"){
+                try{Send(stream,200,"application/json",Json.Serialize(WorkspaceConsult.ReadReport(Query(uri,"id"))));}
+                catch(Exception ex){if(!(ex is ArgumentException||ex is IOException||ex is UnauthorizedAccessException||ex is InvalidOperationException))throw;Send(stream,404,"application/json",Json.Serialize(new{error=ex.Message}));}
+            }
             else if(uri.AbsolutePath.StartsWith("/api/images/",StringComparison.Ordinal)){
                 var image=DashboardImages.Get(uri.AbsolutePath.Substring("/api/images/".Length));
                 if(image==null)Send(stream,404,"text/plain","图片预览已过期，请重新读取图片。");
@@ -73,7 +88,7 @@ sealed class LocalDashboard : IDisposable
             }
             else if(uri.AbsolutePath=="/api/snapshot"){
                 string thread="";foreach(string pair in uri.Query.TrimStart('?').Split('&')){var parts=pair.Split(new[]{'='},2);if(parts[0]=="thread")thread=Uri.UnescapeDataString(parts.Length>1?parts[1]:"");}
-                try{Send(stream,200,"application/json",Json.Serialize(snapshot(thread)));}catch(ArgumentException ex){Send(stream,400,"application/json",Json.Serialize(new{error=ex.Message}));}
+                try{SendSnapshot(stream,headers,snapshot(thread),true);}catch(ArgumentException ex){Send(stream,400,"application/json",Json.Serialize(new{error=ex.Message}));}
             }else Send(stream,404,"text/plain","Not found");
         }}catch(IOException){}catch(SocketException){}catch(ObjectDisposedException){}
     }
@@ -135,7 +150,23 @@ sealed class LocalDashboard : IDisposable
 #if !MACOS
     static void Release(object value){if(value!=null&&Marshal.IsComObject(value))Marshal.ReleaseComObject(value);}
 #endif
+    static string Digest(byte[] data){using(var sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(data)).Replace("-","").ToLowerInvariant();}
+    void SendSnapshot(Stream stream,Dictionary<string,string> headers,object snapshot,bool stableCheckedAt=false)
+    {
+        string body=Json.Serialize(snapshot);byte[] data=Encoding.UTF8.GetBytes(body);
+        if(stableCheckedAt){
+            // checked_at describes when this representation was captured. Reuse it while
+            // all observable state is unchanged so the poll itself does not invalidate ETags.
+            var map=Json.Deserialize<Dictionary<string,object>>(body);map.Remove("checked_at");
+            string signature=Digest(Encoding.UTF8.GetBytes(Json.Serialize(map))),key=Convert.ToString(map["thread_id"]);
+            lock(snapshotGate){Tuple<string,byte[]> cached;if(snapshotCache.TryGetValue(key,out cached)&&cached.Item1==signature)data=cached.Item2;else{if(snapshotCache.Count>=64)snapshotCache.Clear();snapshotCache[key]=Tuple.Create(signature,data);}}
+        }
+        string etag;
+        etag="\"sha256-"+Digest(data)+"\"";
+        string match;bool unchanged=headers.TryGetValue("If-None-Match",out match)&&Array.Exists(match.Split(','),part=>part.Trim()==etag||part.Trim()=="W/"+etag||part.Trim()=="*");
+        SendBytes(stream,unchanged?304:200,"application/json; charset=utf-8",unchanged?new byte[0]:data,etag);
+    }
     static void Send(Stream stream,int status,string type,string body){SendBytes(stream,status,type+"; charset=utf-8",Encoding.UTF8.GetBytes(body));}
-    static void SendBytes(Stream stream,int status,string type,byte[] data){string headers="HTTP/1.1 "+status+" "+(status==200?"OK":"Error")+"\r\nContent-Type: "+type+"\r\nContent-Length: "+data.Length+"\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n";byte[] head=Encoding.ASCII.GetBytes(headers);stream.Write(head,0,head.Length);stream.Write(data,0,data.Length);}
+    static void SendBytes(Stream stream,int status,string type,byte[] data,string etag=null){string headers="HTTP/1.1 "+status+" "+(status==200?"OK":status==304?"Not Modified":"Error")+"\r\nContent-Type: "+type+"\r\nContent-Length: "+data.Length+"\r\n"+(etag==null?"":"ETag: "+etag+"\r\n")+"Connection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n";byte[] head=Encoding.ASCII.GetBytes(headers);stream.Write(head,0,head.Length);stream.Write(data,0,data.Length);}
     public void Dispose(){stopped=true;listener.Stop();}
 }

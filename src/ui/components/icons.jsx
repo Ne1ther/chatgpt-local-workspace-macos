@@ -7,7 +7,7 @@ import {
   ChevronRight, ChevronUp, Search, Terminal, SquareTerminal, File, FilePen, FilePlus, FileX, FileText, FileCode, FileJson,
   FileImage, FileCog, Folder, FolderOpen, GitBranch, GitCompare, Info, TriangleAlert, Check, Circle, CircleDot, CircleCheck,
   CircleAlert, CircleDashed, LoaderCircle, Copy, X, Clock, Activity, Timer, Trash2, Ellipsis, ArrowDown, ArrowRightLeft,
-  Link, Inbox, Pause, Play, MessageSquare, Eye, WifiOff,
+  Link, Inbox, Pause, Play, MessageSquare, Eye, WifiOff, Undo2,
 } from 'lucide-react';
 
 const ICONS = {
@@ -20,7 +20,7 @@ const ICONS = {
   listChecks: ListChecks, refresh: RefreshCw, panelLeft: PanelLeft, panelRight: PanelRight, external: ExternalLink,
   copy: Copy, git: GitBranch, gitCompare: GitCompare, clock: Clock, activity: Activity, timer: Timer, trash: Trash2,
   more: Ellipsis, arrowDown: ArrowDown, move: ArrowRightLeft, link: Link, inbox: Inbox, pause: Pause, play: Play,
-  chat: MessageSquare, eye: Eye, offline: WifiOff,
+  chat: MessageSquare, eye: Eye, offline: WifiOff, undo: Undo2,
 };
 
 export function Icon({ name, className, size = 16 }) {

@@ -1,1 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><rect x="8" y="8" width="240" height="240" rx="52" fill="#163F3C"/><rect x="48" y="57" width="160" height="142" rx="18" fill="#F2F8F5"/><path d="M48 91H208" stroke="#163F3C" stroke-width="10"/><circle cx="66" cy="75" r="5" fill="#31A88A"/><circle cx="82" cy="75" r="5" fill="#31A88A"/><path d="M77 119L100 140L77 161M122 162H170" fill="none" stroke="#167C67" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="128" y1="16" x2="128" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#272D3B"/>
+      <stop offset="50%" stop-color="#151822"/>
+      <stop offset="100%" stop-color="#0C0E14"/>
+    </linearGradient>
+    <linearGradient id="silver" x1="66" y1="68" x2="96" y2="188" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FCFDFF"/>
+      <stop offset="100%" stop-color="#B3C2D9"/>
+    </linearGradient>
+    <linearGradient id="portal" x1="152" y1="68" x2="190" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#B2D1FF"/>
+      <stop offset="100%" stop-color="#6B94DB"/>
+    </linearGradient>
+    <linearGradient id="sapphire" x1="106" y1="88" x2="188" y2="184" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#80E1FF"/>
+      <stop offset="52%" stop-color="#368FFF"/>
+      <stop offset="100%" stop-color="#1F61F5"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="48" fill="url(#bg)" stroke="#485673" stroke-opacity="0.45" stroke-width="2"/>
+  <rect x="28" y="28" width="200" height="200" rx="38" fill="#10131C" stroke="#9EB8EB" stroke-opacity="0.14" stroke-width="1.5"/>
+  <path d="M96 72H74C67.37 72 62 77.37 62 84V172C62 178.63 67.37 184 74 184H96" fill="none" stroke="url(#silver)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M154 72H182C188.63 72 194 77.37 194 84V116" fill="none" stroke="url(#portal)" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M108 96L144 130L108 164" fill="none" stroke="url(#sapphire)" stroke-width="18.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M150 184H194" fill="none" stroke="url(#sapphire)" stroke-width="18" stroke-linecap="round"/>
+</svg>

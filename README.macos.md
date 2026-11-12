@@ -4,7 +4,7 @@
 
 这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的独立 macOS 移植，保留原 macOS 移植并选择性纳入上游 **2.4.1 / f2ab383**。保留原作者与贡献者的 MIT 许可和署名；不是 OpenAI 官方应用，也不代表上游作者发布。
 
-**当前版本为 macOS 1.7.0 / build 15，核心 2.4.1，公开 25 个工具并兼容 5 个旧名称。** DMG 见 [macos-v1.7.0 Release](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.7.0)，也可按下方步骤从源码构建。
+**当前版本为 macOS 1.8.0 / build 16，核心 2.4.1，公开 25 个工具并兼容 5 个旧名称。** 历史安装包见 [macos-v1.7.0 Release](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.7.0)，最新 1.8.0 可直接按下方步骤从源码构建安装。
 
 ## 下载安装（无需编译）
 
@@ -52,6 +52,13 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 ### 后台运行与显示位置
 
 关闭主窗口的红色按钮**不会退出应用或断开连接**，已启动的 Tunnel 和本地任务继续运行。默认同时显示菜单栏图标和 Dock 图标；在“连接与显示 → 显示与后台”可独立控制，两项可以同时开启或同时关闭。关闭“在 Dock 显示”后，打开或关闭主窗口和设置窗口均保持隐藏，不再留下运行中的 Dock 图标。两项都关闭时，用 Spotlight 搜索 ChatGPT 或 Codex，或从 Finder 打开应用，即可恢复同一个进程中的主窗口。点击菜单栏图标可打开主窗口、查看连接状态、停止连接或明确退出；Dock 图标也能重新打开主窗口。只有选择“退出 ChatGPT Codex Workspace”或按 `⌘Q` 才会结束应用和它拥有的后台进程。“停止连接”只断开本次服务，应用仍留在后台。
+
+### macOS 1.8.0 / 上游核心 2.4.1
+
+- 全新 Conduit Vault 图标系统与 `15×15pt`（`@2x` `30×30px`）菜单栏光学模板 `[ >_ ┐`，右下独立光标连通域像素级对齐动态呼吸脉冲。
+- `read_research_bundle` 支持 `file_offsets` / `offset_bytes` / `next_offset_bytes` UTF-8 字节级续读分页（保持 25 个公开 MCP 工具不变）；原生侧新增“科研咨询”驾驶舱与完成通知，网页工作台新增折叠咨询栏与内置 Markdown/公式报告阅读器。
+- 快照端点支持强 `ETag` 与无正文 `304 Not Modified`；检查器新增同源 Token 保护与 SHA-256 冲突校验（`UNDO_CONFLICT`）的文件改动「还原」入口。
+- 侧栏接入原生 `NSVisualEffectView(.sidebar)` 毛玻璃材质，状态栏菜单拓宽至 `332pt` 并补齐实时咨询胶囊与最近调用。
 
 ### macOS 1.7.0 / 上游核心 2.4.1
 

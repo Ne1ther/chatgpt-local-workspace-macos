@@ -68,6 +68,10 @@ final class WorkspaceDashboardSession: NSObject, WKNavigationDelegate {
         retainedView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('workspace-visibility', {detail: \(value)}))")
     }
 
+    func sendCommand(_ action: String) {
+        retainedView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('workspace-command', {detail: {action: '\(action)'}}))")
+    }
+
     private func applyPendingSetup() {
         guard pendingSetup, let view = retainedView else { return }
         pendingSetup = false
@@ -115,42 +119,54 @@ final class WorkspaceDashboardSession: NSObject, WKNavigationDelegate {
     private static func themeScript(for appearance: NSAppearance) -> String {
         var tokens: [String: String] = [:]
         appearance.performAsCurrentDrawingAppearance {
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let palette = WorkspacePalette.nsColor
-            let colors: [String: NSColor] = [
-                "--frame": .windowBackgroundColor, "--surface": .controlBackgroundColor,
-                "--subtle": .underPageBackgroundColor, "--block": .textBackgroundColor, "--popover": .controlBackgroundColor,
-                "--text": .labelColor, "--text-body": .labelColor, "--text-2": .secondaryLabelColor,
-                "--text-3": .secondaryLabelColor, "--text-4": .tertiaryLabelColor, "--placeholder": .placeholderTextColor,
-                "--hover": .unemphasizedSelectedContentBackgroundColor, "--selected": .unemphasizedSelectedContentBackgroundColor,
-                "--rail-hover": .unemphasizedSelectedContentBackgroundColor, "--rail-selected": .selectedContentBackgroundColor,
-                "--line": .separatorColor, "--line-soft": .separatorColor, "--line-strong": .separatorColor,
-                "--ok": .systemGreen, "--warn": .systemOrange, "--danger": .systemRed, "--info": .systemBlue,
-                "--background": .windowBackgroundColor, "--foreground": .labelColor,
-                "--card": .controlBackgroundColor, "--card-foreground": .labelColor,
-                "--muted": .controlBackgroundColor, "--muted-foreground": .secondaryLabelColor,
-                "--secondary": .controlColor, "--secondary-foreground": .labelColor,
-                "--accent": .unemphasizedSelectedContentBackgroundColor, "--accent-foreground": .labelColor,
-                "--primary": .controlAccentColor, "--primary-foreground": .white,
-                "--border": .separatorColor, "--input": .separatorColor, "--ring": .controlAccentColor,
-                "--success": .systemGreen, "--warning": .systemOrange, "--destructive": .systemRed,
-            ]
+            let srgb = { (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) in
+                NSColor(srgbRed: r / 255.0, green: g / 255.0, blue: b / 255.0, alpha: a)
+            }
+            let frameColor = isDark ? srgb(20, 22, 26, 1) : srgb(238, 240, 244, 1)
+            let headerColor = isDark ? srgb(33, 36, 43, 1) : srgb(246, 247, 249, 1)
+            let surfaceColor = isDark ? srgb(27, 29, 34, 1) : srgb(255, 255, 255, 1)
+            let subtleColor = isDark ? srgb(36, 40, 48, 1) : srgb(243, 244, 247, 1)
+            let blockColor = isDark ? srgb(23, 25, 30, 1) : srgb(247, 248, 250, 1)
+            let textPrimary = isDark ? srgb(242, 244, 248, 1) : srgb(20, 23, 31, 1)
+            let textSecondary = isDark ? srgb(201, 208, 220, 1) : srgb(51, 57, 71, 1)
+            let textTertiary = isDark ? srgb(157, 167, 184, 1) : srgb(82, 91, 110, 1)
+            let textQuaternary = isDark ? srgb(127, 138, 156, 1) : srgb(104, 114, 133, 1)
+            let placeholderColor = isDark ? srgb(109, 119, 136, 1) : srgb(123, 132, 150, 1)
+            let chipColor = isDark ? srgb(42, 47, 58, 1) : srgb(235, 237, 242, 1)
+            let diffAdd = isDark ? srgb(24, 50, 37, 1) : srgb(230, 246, 236, 1)
+            let diffDel = isDark ? srgb(56, 30, 33, 1) : srgb(252, 235, 233, 1)
+            let diffAddNo = isDark ? srgb(31, 68, 49, 1) : srgb(201, 235, 214, 1)
+            let diffDelNo = isDark ? srgb(76, 38, 42, 1) : srgb(247, 211, 208, 1)
+            let lineSoft = isDark ? srgb(45, 50, 60, 1) : srgb(226, 229, 236, 1)
+            let lineColor = isDark ? srgb(56, 62, 74, 1) : srgb(213, 218, 227, 1)
+            let lineStrong = isDark ? srgb(74, 82, 98, 1) : srgb(191, 198, 210, 1)
+
             let themed: [String: NSColor] = [
-                "--frame": palette("sidebar"), "--surface": palette("surface"), "--subtle": palette("raised"),
-                "--block": palette("page"), "--popover": palette("raised"), "--text": palette("text"),
-                "--text-body": palette("text"), "--text-2": palette("secondary"), "--text-3": palette("secondary"),
-                "--text-4": palette("secondary"), "--placeholder": palette("secondary"), "--hover": palette("raised"),
-                "--selected": palette("selection"), "--rail-hover": palette("raised"), "--rail-selected": palette("selection"),
-                "--line": palette("border"), "--line-soft": palette("border"), "--line-strong": palette("border"),
+                "--frame": frameColor, "--header": headerColor, "--surface": surfaceColor,
+                "--subtle": subtleColor, "--block": blockColor, "--popover": subtleColor,
+                "--text": textPrimary, "--text-body": textPrimary,
+                "--text-2": textSecondary, "--text-3": textTertiary,
+                "--text-4": textQuaternary, "--placeholder": placeholderColor,
+                "--hover": subtleColor, "--selected": palette("selection"),
+                "--rail-hover": subtleColor, "--rail-selected": palette("selection"),
+                "--line": lineColor, "--line-soft": lineSoft, "--line-strong": lineStrong,
                 "--ok": palette("teal"), "--warn": palette("orange"), "--danger": palette("danger"), "--info": palette("blue"),
-                "--primary": palette("button"), "--primary-hover": palette("button"), "--background": palette("surface"),
-                "--foreground": palette("text"), "--card": palette("raised"), "--card-foreground": palette("text"),
-                "--muted": palette("raised"), "--muted-foreground": palette("secondary"), "--secondary": palette("raised"),
-                "--secondary-foreground": palette("text"), "--accent": palette("selection"), "--accent-foreground": palette("text"),
-                "--border": palette("border"), "--input": palette("border"), "--ring": palette("blue"),
+                "--primary": palette("button"), "--primary-hover": palette("button"), "--primary-foreground": .white,
+                "--background": surfaceColor, "--foreground": textPrimary,
+                "--card": subtleColor, "--card-foreground": textPrimary,
+                "--muted": subtleColor, "--muted-foreground": textSecondary,
+                "--secondary": subtleColor, "--secondary-foreground": textPrimary,
+                "--accent": palette("selection"), "--accent-foreground": textPrimary,
+                "--border": lineColor, "--input": lineColor, "--ring": palette("blue"),
                 "--success": palette("teal"), "--warning": palette("orange"), "--destructive": palette("danger"),
-                "--violet": palette("violet"), "--teal": palette("teal"), "--orange": palette("orange"), "--header": palette("raised"),
+                "--violet": palette("violet"), "--teal": palette("teal"), "--orange": palette("orange"),
+                "--chip": chipColor,
+                "--diff-add": diffAdd, "--diff-del": diffDel,
+                "--diff-add-no": diffAddNo, "--diff-del-no": diffDelNo,
             ]
-            for (key, color) in colors.merging(themed, uniquingKeysWith: { _, custom in custom }) {
+            for (key, color) in themed {
                 guard let rgb = color.usingColorSpace(.sRGB) else { continue }
                 let components = [rgb.redComponent, rgb.greenComponent, rgb.blueComponent, rgb.alphaComponent].map { max(0, min(255, Int(($0 * 255).rounded()))) }
                 tokens[key] = String(format: "#%02x%02x%02x%02x", components[0], components[1], components[2], components[3])

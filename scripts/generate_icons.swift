@@ -74,9 +74,8 @@ func appPNG(_ pixels: Int) -> Data {
 }
 func menuPNG(_ scale: CGFloat, color: NSColor = .black) -> Data {
     render(NSSize(width: 20, height: 20), scale: scale) {
-        // Optical-size artwork: broad bands, open counters and a longer baseline.
-        // Keep native status-item width; use more of its available image area.
-        drawFitted(menu, pixelBounds: menuBounds, in: NSRect(x: 1, y: 1, width: 18, height: 18))
+        // Native macOS menu bar optical cap height: 15x15pt (30x30px @2x) centered in 20x20pt cell.
+        drawFitted(menu, pixelBounds: menuBounds, in: NSRect(x: 2.5, y: 2.5, width: 15, height: 15))
         color.setFill()
         NSRect(x: 0, y: 0, width: 20, height: 20).fill(using: .sourceIn)
     }
@@ -126,7 +125,7 @@ let proof = render(NSSize(width: 620, height: 160), scale: 2) {
                 NSImage(data: mask)!.draw(in: NSRect(x: 238 + index * 46, y: Int(y) + 1, width: 18, height: 18))
             }
         }
-        ("20 pt  ·  optical glyph 18 pt" as NSString).draw(at: NSPoint(x: 380, y: y + 2),
+        ("20 pt  ·  optical glyph 15 pt" as NSString).draw(at: NSPoint(x: 380, y: y + 2),
             withAttributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: foreground])
     }
     ("Native asset size proof · 2× pixels" as NSString).draw(at: NSPoint(x: 174, y: 132),

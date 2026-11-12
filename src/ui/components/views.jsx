@@ -6,6 +6,7 @@ import { CodeBlock, LineWindow } from './code-block.jsx';
 import { bytes, duration, splitPath } from '@/lib/format.js';
 import { OPERATIONS } from '@/lib/labels.js';
 import { liveElapsed } from '@/lib/rows.js';
+import { INFO_LABELS, consultField, consultNumber } from '@/lib/consult.js';
 
 const Counts = ({ added, removed }) => (
   <span className="counts tabular"><span className="plus">+{added || 0}</span> <span className="minus">−{removed || 0}</span></span>
@@ -36,7 +37,7 @@ const Note = ({ children }) => <div className="note">{children}</div>;
 const Alert = ({ children }) => <div className="alert"><span className="mark"><Icon name="circleAlert" size={14} /></span><div>{children}</div></div>;
 const Status = ({ children }) => <div className="code-status">{children}</div>;
 
-function Diff({ diff }) {
+export function Diff({ diff }) {
   if (!diff) return null;
   const rows = diff.rows || [];
   return (
@@ -69,6 +70,7 @@ export function DetailViews({ row, now }) {
   if (!detail) return null;
   const kind = detail.kind;
 
+  if ((row.tool === 'read_research_bundle' || row.tool === 'submit_pro_report') && (kind === 'info' || kind === 'consult')) return <ConsultView row={row} />;
   if (kind === 'image') return <ImageView key={row.id} detail={detail} />;
   if (kind === 'workspace') return <>
     <CodeBlock icon="activity" title={detail.summary || '连接诊断'}><Facts rows={detail.info || []} /></CodeBlock>
@@ -281,4 +283,69 @@ function OutputCopy({ text }) {
   const [done, setDone] = useState(false);
   const copy = async () => { try { await navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 1400); } catch { /* clipboard denied */ } };
   return <button type="button" className="foot-action" onClick={copy}><Icon name={done ? 'check' : 'copy'} size={12} />{done ? '已复制' : '复制输出'}</button>;
+}
+
+// Web Pro consultation calls: a structured card instead of anonymous label/value rows.
+// read_research_bundle shows the bundle, its byte budget and the pagination cursor;
+// submit_pro_report shows where the report landed and how T3 Code can verify it.
+const KNOWN_LABELS = new Set(Object.values(INFO_LABELS).flat());
+function ConsultView({ row }) {
+  const detail = row.detail;
+  const field = key => consultField(detail, key);
+  const extra = (detail.info || []).filter(item => item && !KNOWN_LABELS.has(item.label));
+  if (row.tool === 'read_research_bundle') {
+    const files = consultNumber(detail, 'file_count'), cut = consultNumber(detail, 'truncated_count');
+    const offset = consultNumber(detail, 'offset_bytes'), next = consultNumber(detail, 'next_offset_bytes'), total = consultNumber(detail, 'total_bytes');
+    const range = offset > 0 || next > 0
+      ? '从第 ' + offset.toLocaleString() + ' 字节' + (next > 0 ? ' 读到第 ' + next.toLocaleString() + ' 字节' : ' 读到结尾')
+      : '';
+    const facts = [
+      { label: '咨询编号', value: field('consult_id'), mono: true },
+      { label: '文件', value: files ? files + ' 个' + (cut ? '，其中 ' + cut + ' 个按字节预算截断' : '，全部完整读取') : '' },
+      { label: '本次读取', value: total ? bytes(total) : '' },
+      { label: '读取范围', value: range },
+      { label: '资料包指纹', value: field('bundle_sha256'), mono: true },
+      ...extra,
+    ];
+    const list = Array.isArray(detail.files) ? detail.files : [];
+    return (
+      <>
+        <CodeBlock icon="inbox" title={field('title') || '研究资料包'} hint={field('instructions') || undefined}
+          right={<span className="tag tabular">{next > 0 ? '分段读取中' : '已读取'}</span>}
+          copy={field('consult_id') || ''} copyLabel="复制咨询编号"
+          foot={next > 0 ? <span>还有后续内容：下一次调用 read_research_bundle 时传 <code className="chip">offset_bytes: {next}</code> 继续读取。</span> : offset > 0 ? <span>这是续读的最后一段，资料包已读完。</span> : null}>
+          <Facts rows={facts} />
+          {field('instructions') ? <div className="row stack"><span className="label">研究要求</span><div className="card-text">{field('instructions')}</div></div> : null}
+          {list.length
+            ? <div className="entries">{list.map((file, index) => (
+                <div key={index} className="entry">
+                  <span className="mark"><Icon name={fileIcon(file.path)} size={14} /></span>
+                  <span className="name"><PathLink value={file.path} />{file.size_bytes != null ? <span className="muted"> · {bytes(file.size_bytes)}</span> : null}{file.truncated ? <span className="danger"> · 已截断</span> : null}</span>
+                </div>
+              ))}</div>
+            : null}
+        </CodeBlock>
+        <Note>Web Pro 读取资料包后，咨询状态会变为「Web Pro 读取中」；提交报告后变为「报告已归档」。</Note>
+      </>
+    );
+  }
+  const lines = consultNumber(detail, 'line_count'), size = consultNumber(detail, 'byte_length');
+  const facts = [
+    { label: '咨询编号', value: field('consult_id'), mono: true },
+    { label: '报告文件', value: field('report_path'), mono: true },
+    { label: '回执文件', value: field('receipt_path'), mono: true },
+    { label: '大小', value: [lines ? lines + ' 行' : '', size ? bytes(size) : ''].filter(Boolean).join(' · ') },
+    { label: 'SHA256', value: field('sha256'), mono: true },
+    ...extra,
+  ];
+  return (
+    <>
+      <CodeBlock icon="fileText" title={field('title') || (field('report_path') ? splitPath(field('report_path')).name : '') || 'Pro 研究报告'} hint={field('report_path')}
+        right={<span className="tag">报告已归档</span>} copy={field('report_path') || ''} copyLabel="复制报告路径">
+        <Facts rows={facts} />
+        {field('summary') ? <div className="row stack"><span className="label">摘要</span><div className="card-text">{field('summary')}</div></div> : null}
+      </CodeBlock>
+      <Note>报告已写入咨询收件箱，不会覆盖旧报告。可在时间线上方的「Web Pro 咨询」栏查看渲染后的报告，或复制 T3 回执交给 T3 Code 核对 SHA256 后继续任务。</Note>
+    </>
+  );
 }

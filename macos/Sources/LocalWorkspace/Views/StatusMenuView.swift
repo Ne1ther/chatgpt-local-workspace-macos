@@ -6,6 +6,9 @@ struct StatusMenuView: View {
     let delegate: AppDelegate
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var activeCount: Int { store.activeCommandCount > 0 ? store.activeCommandCount : store.activeCallCount }
+    private var recentActivities: [ActivityEntry] {
+        Array(store.activity.filter { !$0.isConnectionEvent }.prefix(3))
+    }
     private var workLabel: String {
         if store.snapshotStale { return "状态暂不可用" }
         if store.activeCommandCount > 0 { return "命令正在运行" }
@@ -13,7 +16,7 @@ struct StatusMenuView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 WorkspaceBrandMark(size: 38)
                 VStack(alignment: .leading, spacing: 4) {
@@ -35,8 +38,74 @@ struct StatusMenuView: View {
                 }
                 .font(.callout)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: store.activeWorkCount)
-                Text(store.snapshotStale ? "连接恢复后将更新本机状态。" : "文件、命令输出与操作记录可在工作台查看。")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+
+                if !store.consults.isEmpty {
+                    Button {
+                        store.destination = .consult
+                        delegate.showMainWindow()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "sparkles.rectangle.stack")
+                                .foregroundStyle(WorkspacePalette.teal)
+                            Text(store.activeConsultCount > 0
+                                 ? "科研咨询 · \(store.activeConsultCount) 项进行中"
+                                 : "科研咨询 · \(store.consults.count) 项记录")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(WorkspacePalette.text)
+                            Spacer(minLength: 4)
+                            if let latest = store.consults.first {
+                                Text(latest.statusLabel)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(WorkspacePalette.teal)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(WorkspacePalette.teal.opacity(0.11), in: RoundedRectangle(cornerRadius: 9))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9)
+                                .strokeBorder(WorkspacePalette.teal.opacity(0.26), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if !recentActivities.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("最近调用")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        ForEach(recentActivities) { entry in
+                            HStack(spacing: 8) {
+                                Image(systemName: entry.status == "failed" ? "exclamationmark.circle" : entry.status == "running" ? "terminal" : "checkmark.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(entry.status == "failed" ? Color.orange : entry.status == "running" ? Color.blue : Color.secondary)
+                                    .frame(width: 14)
+                                Text(entry.displayTool)
+                                    .font(.caption)
+                                    .foregroundStyle(WorkspacePalette.text)
+                                    .lineLimit(1)
+                                Spacer(minLength: 6)
+                                Text(entry.localTime)
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(10)
+                    .background(WorkspacePalette.surface, in: RoundedRectangle(cornerRadius: 9))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9)
+                            .strokeBorder(WorkspacePalette.border, lineWidth: 1)
+                    )
+                } else {
+                    Text(store.snapshotStale ? "连接恢复后将更新本机状态。" : "文件、命令输出与操作记录可在工作台查看。")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+
                 Button { store.destination = .workbench; delegate.showMainWindow() } label: {
                     HStack { Text("查看工作台"); Spacer(); Image(systemName: "arrow.up.right") }.frame(maxWidth: .infinity)
                 }
@@ -64,7 +133,7 @@ struct StatusMenuView: View {
             }
             .buttonStyle(.plain).font(.callout).foregroundStyle(.secondary)
         }
-        .padding(20).frame(width: 300)
+        .padding(20).frame(width: 332)
     }
     private func showSettings() {
         delegate.showSettings()

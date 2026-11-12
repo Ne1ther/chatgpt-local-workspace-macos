@@ -5,6 +5,7 @@ struct WorkspaceLibraryView: View {
     let store: WorkspaceStore
     @Environment(\.openSettings) private var openSettings
     @State private var query = ""
+    @State private var hoveredID: String?
 
     private var directories: [WorkspaceDirectory] {
         WorkspaceDirectory.grouped(store.conversations, activity: store.activity).compactMap { directory in
@@ -91,7 +92,10 @@ struct WorkspaceLibraryView: View {
                     }.buttonStyle(.plain).foregroundStyle(.secondary).help("在访达中打开工作目录")
                 }
             }.padding(18).background(WorkspacePalette.raised)
-            ForEach(directory.conversations) { conversation in
+            ForEach(Array(directory.conversations.enumerated()), id: \.element.id) { index, conversation in
+                if index > 0 {
+                    Divider().padding(.leading, 52)
+                }
                 Button { store.selectConversation(conversation.id) } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "bubble.left").foregroundStyle(.secondary).frame(width: 22)
@@ -111,9 +115,15 @@ struct WorkspaceLibraryView: View {
                         }
                         Image(systemName: "chevron.right").font(.caption2).foregroundStyle(WorkspacePalette.secondaryText)
                     }
-                    .padding(.horizontal, 18).padding(.vertical, 14).contentShape(Rectangle())
+                    .padding(.horizontal, 18).padding(.vertical, 14)
+                    .background(hoveredID == conversation.id ? Color.primary.opacity(0.045) : Color.clear)
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).accessibilityLabel("打开会话：\(conversation.displayTitle(among: directory.conversations))，\(conversation.shortCode)")
+                .buttonStyle(.plain)
+                .onHover { isHovering in
+                    hoveredID = isHovering ? conversation.id : (hoveredID == conversation.id ? nil : hoveredID)
+                }
+                .accessibilityLabel("打开会话：\(conversation.displayTitle(among: directory.conversations))，\(conversation.shortCode)")
             }
         }
         .background(WorkspacePalette.surface, in: RoundedRectangle(cornerRadius: 12))

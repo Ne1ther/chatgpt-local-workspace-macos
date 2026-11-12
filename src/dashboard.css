@@ -22,28 +22,54 @@
 --color-destructive:var(--danger);--color-success:var(--ok);--color-warning:var(--warn);
 --color-border:var(--line);--color-input:var(--line-strong);--color-ring:var(--ring);
 --radius-sm:6px;--radius-md:8px;--radius-lg:10px;--radius-xl:12px;
---font-sans:"Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI",system-ui,sans-serif;
---font-mono:"Cascadia Mono",Consolas,"Microsoft YaHei UI",monospace;
+--font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",system-ui,sans-serif;
+--font-mono:"SF Mono",ui-monospace,"Maple Mono NF CN",Menlo,Monaco,monospace;
 }
+/* One token system, macOS first. Light is the default; the dark block below swaps every
+   surface, text and accent token at once, so components never hardcode a color.
+   Text is a genuine three-step hierarchy, each step >= 4.8:1 against --surface:
+     light  --text #1d1d1f 16.3:1 · --text-2 #48484d 9.0:1 · --text-3 #6b6b70 5.3:1
+     dark   --text #f5f5f7 15.6:1 · --text-2 #c7c7cc 10.9:1 · --text-3 #9d9da3 6.2:1 */
 :root{
-/* Surfaces */
---frame:#f7f7f7;--surface:#ffffff;--subtle:#fafafa;--muted:#f3f3f3;--block:#f7f7f7;--popover:#ffffff;
---hover:#f5f5f5;--rail-hover:#eeeeee;--selected:#ededed;--rail-selected:#e8e8e8;--chip:rgba(0,0,0,.045);
---line:#ececec;--line-soft:#f2f2f2;--line-strong:#e0e0e0;
+--font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",system-ui,sans-serif;
+--font-mono:"SF Mono",ui-monospace,"Maple Mono NF CN",Menlo,Monaco,monospace;
+/* Surfaces: window frame < header band < content sheet */
+--frame:#ececee;--header:#f6f6f7;--surface:#ffffff;--subtle:#f7f7f8;--muted:#f0f0f2;--block:#f4f4f5;--popover:#ffffff;
+--hover:#f3f3f5;--rail-hover:#e2e2e5;--selected:#e8e8ec;--rail-selected:#dedee2;--chip:#efeff1;
+--line:#e1e1e4;--line-soft:#ececee;--line-strong:#c7c7cc;
 /* Text */
---text:#0d0d0d;--text-body:#363636;--text-2:#5d5d5d;--text-3:#8f8f8f;--placeholder:#b4b4b4;--text-4:#c4c4c4;
-/* Actions and states (OpenAI Apps SDK UI scales) */
---primary:#0d0d0d;--primary-hover:#303030;
---ok:#008635;--ok-soft:#edfaf2;--danger:#ba2623;--danger-soft:#fff0f0;--warn:#ba8e00;--warn-soft:#fff6d9;
---info:#0285ff;--ring:#0285ff;
---diff-add:#e9f5ec;--diff-del:#fbeaea;--diff-add-no:#d7eedd;--diff-del-no:#f6dada;
+--text:#1d1d1f;--text-body:#2c2c2e;--text-2:#48484d;--text-3:#6b6b70;--text-4:#8e8e93;--placeholder:#8a8a8f;
+--inverse:#1d1d1f;--on-inverse:#ffffff;--on-danger:#ffffff;
+/* Actions and states */
+--primary:#0a64d8;--primary-hover:#0857bd;--info:#0a62c9;--ring:#0a64d8;
+--violet:#7546c9;--teal:#0b7a72;--orange:#9a5500;
+--ok:#0b7a52;--ok-soft:#e6f5ee;--danger:#c02a3c;--danger-soft:#fdeeef;--warn:#9a5500;--warn-soft:#fdf3e2;
+--info-soft:#e8f1fc;
+--diff-add:#e7f5ec;--diff-del:#fcebec;--diff-add-no:#d3ecdc;--diff-del-no:#f6d8db;--diff-add-ink:#4f8a62;--diff-del-ink:#a5636a;
+--progress:#dcdce0;--progress-mid:#a1a1a8;
 --shadow-pop:0 8px 28px rgba(0,0,0,.10),0 0 0 1px rgba(0,0,0,.06);
---scroll-thumb:rgba(0,0,0,.14);--scroll-thumb-hover:rgba(0,0,0,.26);
+--scroll-thumb:rgba(0,0,0,.16);--scroll-thumb-hover:rgba(0,0,0,.28);
+--background:var(--surface);--foreground:var(--text);
 /* Layout */
 --col:1120px;--pad:32px;--ease:cubic-bezier(.2,0,0,1);
-color-scheme:light;font:13px/20px var(--font-sans);background:var(--frame);color:var(--text);font-synthesis:none;
+color-scheme:light dark;font:13px/20px var(--font-sans);background:var(--frame);color:var(--text);font-synthesis:none;
 -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
 }
+@media (prefers-color-scheme:dark){:root{
+--frame:#262628;--header:#232325;--surface:#1e1e20;--subtle:#29292c;--muted:#2e2e31;--block:#222224;--popover:#2c2c2f;
+--hover:#2a2a2d;--rail-hover:#333336;--selected:#36373c;--rail-selected:#3a3a3f;--chip:#2e2e31;
+--line:#3a3a3d;--line-soft:#2f2f32;--line-strong:#58585e;
+--text:#f5f5f7;--text-body:#e5e5ea;--text-2:#c7c7cc;--text-3:#9d9da3;--text-4:#7c7c82;--placeholder:#8a8a90;
+--inverse:#f5f5f7;--on-inverse:#1d1d1f;--on-danger:#2a0d10;
+--primary:#2b6fe0;--primary-hover:#3a7deb;--info:#6cb2ff;--ring:#6cb2ff;
+--violet:#c4a7ff;--teal:#5fd4be;--orange:#f5b562;
+--ok:#5fd4a0;--ok-soft:#163a2a;--danger:#ff8f98;--danger-soft:#45262a;--warn:#f5b562;--warn-soft:#423624;
+--info-soft:#1d3048;
+--diff-add:#1b3626;--diff-del:#41272a;--diff-add-no:#234631;--diff-del-no:#523236;--diff-add-ink:#8cc59e;--diff-del-ink:#d99aa1;
+--progress:#3d3d42;--progress-mid:#77777e;
+--shadow-pop:0 10px 32px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.08);
+--scroll-thumb:rgba(255,255,255,.18);--scroll-thumb-hover:rgba(255,255,255,.3);
+}}
 *{box-sizing:border-box}
 /* Thin, quiet scrollbars that darken on hover. */
 *::-webkit-scrollbar{width:10px;height:10px}
@@ -77,10 +103,10 @@ button:disabled{cursor:default}
 .btn:disabled{color:var(--placeholder);cursor:default}
 .btn[data-variant="default"]{background:var(--primary);color:#fff}
 .btn[data-variant="default"]:hover:not(:disabled){background:var(--primary-hover)}
-.btn[data-variant="destructive"]{background:var(--danger);color:#fff}
-.btn[data-variant="destructive"]:hover:not(:disabled){background:#a1201d}
+.btn[data-variant="destructive"]{background:var(--danger);color:var(--on-danger)}
+.btn[data-variant="destructive"]:hover:not(:disabled){filter:brightness(.92)}
 .btn[data-variant="secondary"]{background:var(--muted)}
-.btn[data-variant="secondary"]:hover:not(:disabled){background:#ebebeb}
+.btn[data-variant="secondary"]:hover:not(:disabled){background:var(--rail-hover)}
 .btn[data-variant="outline"]{border-color:var(--line-strong);background:var(--surface)}
 .btn[data-variant="outline"]:hover:not(:disabled){background:var(--hover)}
 .btn[data-variant="ghost"]{color:var(--text-2)}
@@ -99,7 +125,7 @@ button:disabled{cursor:default}
 /* Fields ------------------------------------------------------------------ */
 .field{display:block;width:100%;min-width:0;height:32px;padding:0 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;transition:border-color .12s var(--ease)}
 .field::placeholder{color:var(--placeholder)}
-.field:hover{border-color:#d4d4d4}
+.field:hover{border-color:var(--text-4)}
 .field:focus-visible{outline:2px solid var(--ring);outline-offset:-1px;border-color:transparent}
 .field-area{height:auto;min-height:88px;padding:8px 10px;line-height:1.6;resize:vertical}
 
@@ -148,7 +174,7 @@ html.embedded .sidebar-head{display:none}
 .app-shell:is(.collapsed,.rail) .thread.two-line .thread-glyph{margin-top:0}
 .app-shell:is(.collapsed,.rail) .thread-glyph:has(.thread-initial){width:24px;height:24px;border-radius:6px;background:var(--rail-hover)}
 .app-shell:is(.collapsed,.rail) .thread-initial{display:inline}
-.tooltip-content{z-index:60;max-width:320px;padding:4px 8px;border-radius:6px;background:var(--text);color:#fff;font-size:12px;line-height:16px}
+.tooltip-content{z-index:60;max-width:320px;padding:4px 8px;border-radius:6px;background:var(--inverse);color:var(--on-inverse);font-size:12px;line-height:16px}
 
 /* Main column ------------------------------------------------------------ */
 /* Every band (header, plan, filters, stream) centres the same content box: full width up
@@ -204,7 +230,7 @@ html.embedded .sidebar-head{display:none}
 .shown{margin-left:auto;font-size:12px;color:var(--text-3);white-space:nowrap}
 .banner{display:flex;align-items:center;gap:8px;flex-shrink:0;padding:8px max(var(--pad),calc((100% - var(--col)) / 2));border-bottom:1px solid var(--line);background:var(--danger-soft);color:var(--danger);font-size:12px}
 .banner-action{margin-left:auto;padding:2px 8px;border-radius:6px;font-weight:500}
-.banner-action:hover{background:rgba(186,38,35,.08)}
+.banner-action:hover{background:var(--surface)}
 
 /* Plan: a flat band between header and stream, never floating over rows. */
 .plan-card{flex-shrink:0;border-bottom:1px solid var(--line);background:var(--surface)}
@@ -215,9 +241,9 @@ html.embedded .sidebar-head{display:none}
 .plan-icon{flex-shrink:0;color:var(--text-2)}
 .plan-name{font-weight:600;color:var(--text)}
 .plan-progress{display:inline-flex;gap:3px;flex-shrink:0}
-.plan-progress i{display:block;width:14px;height:4px;border-radius:2px;background:#e6e6e6}
+.plan-progress i{display:block;width:14px;height:4px;border-radius:2px;background:var(--progress)}
 .plan-progress i.completed{background:var(--text-2)}
-.plan-progress i.in_progress{background:#ababab}
+.plan-progress i.in_progress{background:var(--progress-mid)}
 .plan-count{flex-shrink:0;font-size:12px;color:var(--text-3)}
 .plan-current{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-body)}
 .plan-head .chevron{flex-shrink:0;color:var(--text-3);transition:transform .15s var(--ease)}
@@ -324,7 +350,7 @@ html.embedded .sidebar-head{display:none}
 .empty-hint{max-width:380px;font-size:13px;line-height:20px;color:var(--text-3)}
 .empty-actions{display:flex;gap:8px;margin-top:14px}
 .skeleton{padding-top:8px}
-.skeleton i{display:block;height:10px;border-radius:5px;background:#f0f0f0}
+.skeleton i{display:block;height:10px;border-radius:5px;background:var(--muted)}
 .sk-divider{display:flex;align-items:center;height:28px;margin:8px 0 4px}
 .sk-row{display:flex;align-items:center;gap:10px;height:32px}
 .sk-row .sk-icon{width:16px;height:16px;border-radius:4px;flex-shrink:0}
@@ -383,8 +409,8 @@ html.embedded .sidebar-head{display:none}
 .diff-row.add{background:var(--diff-add)}
 .diff-row.remove{background:var(--diff-del)}
 .diff-no{padding-right:8px;text-align:right;color:var(--placeholder);user-select:none;font-variant-numeric:tabular-nums}
-.diff-row.add .diff-no{background:var(--diff-add-no);color:#6f9c7c}
-.diff-row.remove .diff-no{background:var(--diff-del-no);color:#b07a7a}
+.diff-row.add .diff-no{background:var(--diff-add-no);color:var(--diff-add-ink)}
+.diff-row.remove .diff-no{background:var(--diff-del-no);color:var(--diff-del-ink)}
 .diff-mark{text-align:center;color:var(--text-3);user-select:none}
 .diff-row.add .diff-mark{color:var(--ok)}
 .diff-row.remove .diff-mark{color:var(--danger)}
@@ -509,7 +535,7 @@ html.embedded .sidebar-head{display:none}
 .task-history{margin:8px 0;color:var(--text-3);font-size:12px}
 .task-history summary{cursor:pointer}
 .task-history li,.task-history p{overflow-wrap:anywhere}
-.notice{position:fixed;left:50%;bottom:20px;z-index:70;transform:translateX(-50%);max-width:min(520px,calc(100vw - 32px));padding:10px 14px;border-radius:12px;background:var(--text);color:#fff;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.notice{position:fixed;left:50%;bottom:20px;z-index:70;transform:translateX(-50%);max-width:min(520px,calc(100vw - 32px));padding:10px 14px;border-radius:12px;background:var(--inverse);color:var(--on-inverse);font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
 .notice.error{background:var(--danger)}
 
 /* Narrow windows ----------------------------------------------------------- */
@@ -521,19 +547,8 @@ html.embedded .sidebar-head{display:none}
 .detail-column .diff-row{grid-template-columns:36px 36px 14px minmax(0,1fr)}
 .detail-column .file-line{grid-template-columns:minmax(36px,auto) minmax(0,1fr);gap:10px}
 
-/* macOS keeps one native navigation surface. The WK content uses system colors
-   supplied once per appearance change, with adaptive fallbacks in a browser. */
-:root{--font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Segoe UI",system-ui,sans-serif;--font-mono:"SFMono-Regular",Menlo,Consolas,monospace;color-scheme:light dark;--primary:#3478f6;--primary-hover:#2568e6}
-@media(prefers-color-scheme:dark){:root{
---frame:#1e1f22;--surface:#242528;--subtle:#28292d;--muted:#2d2e33;--block:#202125;--popover:#2c2d32;
---hover:#313239;--rail-hover:#2b2d33;--selected:#353a46;--rail-selected:#353a46;--chip:rgba(255,255,255,.06);
---line:#393b42;--line-soft:#303239;--line-strong:#4b4e57;--text:#f1f2f5;--text-body:#e1e3e8;
---text-2:#b7bdc8;--text-3:#9aA2af;--text-4:#737b89;--placeholder:#868e9d;
---ok:#75d5a0;--ok-soft:#153b28;--danger:#ff8985;--danger-soft:#472a2a;--warn:#e9c46b;--warn-soft:#443d25;
---primary:#82adff;--primary-hover:#a0bfff;--info:#82adff;--ring:#82adff;
---diff-add:#1c3928;--diff-del:#422b2c;--diff-add-no:#244b33;--diff-del-no:#543638;
---scroll-thumb:rgba(255,255,255,.17);--scroll-thumb-hover:rgba(255,255,255,.28)
-}}
+/* macOS keeps one native navigation surface: in ?native=1 the Swift window owns the
+   sidebar, the toolbar and the live connection status. */
 .native-shell.app-shell,.native-shell.app-shell:is(.collapsed,.rail){grid-template-columns:minmax(0,1fr)}
 .native-shell .main-sheet{border-left:0;--pad:24px}
 .native-shell .head-sidebar{display:none}
@@ -562,21 +577,6 @@ html[data-visible="false"] *,html[data-visible="false"] *::before,html[data-visi
 /* A failed local operation includes its concrete recovery step. */
 .recovery-hint { margin: 8px 0 0; line-height: 1.55; }
 
-/* More distinct surfaces, readable secondary text, and useful colored components. */
-:root{
---frame:#ededed;--surface:#ffffff;--subtle:#f7f7f7;--muted:#f2f2f2;--block:#f2f2f2;--popover:#ffffff;--header:#f7f7f7;
---text:#202020;--text-body:#202020;--text-2:#5c5c5c;--text-3:#5c5c5c;--text-4:#656565;--placeholder:#656565;
---line:#d7d7d7;--line-soft:#e5e5e5;--line-strong:#aaaaaa;--hover:#f2f2f2;--selected:#e5e5e5;--rail-hover:#e4e4e4;--rail-selected:#e5e5e5;
---primary:#245fc0;--primary-hover:#1d50a7;--info:#245fc0;--ring:#245fc0;--violet:#7052bd;--teal:#087b74;--orange:#975100;
---ok:#087b74;--warn:#975100;--danger:#b6293d;--chip:#eeeeee;--background:#ffffff;--foreground:#202020;
-}
-@media(prefers-color-scheme:dark){:root{
---frame:#252525;--surface:#1e1e1e;--subtle:#303030;--muted:#303030;--block:#242424;--popover:#303030;--header:#292929;
---text:#f5f5f5;--text-body:#f5f5f5;--text-2:#c2c2c2;--text-3:#c2c2c2;--text-4:#b8b8b8;--placeholder:#b8b8b8;
---line:#4a4a4a;--line-soft:#3b3b3b;--line-strong:#686868;--hover:#303030;--selected:#3b3b3b;--rail-hover:#353535;--rail-selected:#3b3b3b;
---primary:#2864c7;--primary-hover:#3272dc;--info:#8abfff;--ring:#8abfff;--violet:#cab2ff;--teal:#6cdbc5;--orange:#f7bc6a;
---ok:#6cdbc5;--warn:#f7bc6a;--danger:#ff969e;--chip:#303030;--background:#1e1e1e;--foreground:#f5f5f5;
-}}
 .workspace-head{background:var(--header);border-bottom:1px solid var(--line)}
 .directory-toggle>svg:first-child{color:var(--info)}
 .directory-label>span{font-size:11px;line-height:16px}
@@ -602,3 +602,94 @@ html[data-visible="false"] *,html[data-visible="false"] *::before,html[data-visi
 .plan-mark,.step-index.done{color:var(--teal)}
 @keyframes conversation-enter{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.thread.two-line:hover{transform:none}.directory-group .thread,.event-wrap{animation:none}}
+
+/* Native header: the macOS toolbar above already shows the live connection, so the page
+   header drops the pill and reads as the top of the content sheet, not a second bar. */
+.native-shell #connection,.native-shell #connection+.head-sep{display:none}
+.native-shell .workspace-head{padding-top:8px;padding-bottom:8px;background:var(--surface);border-bottom:1px solid var(--line-soft)}
+.native-shell .workspace-head h1{font-size:15px;letter-spacing:-.01em}
+.native-shell .head-meta{margin-top:2px}
+
+/* Web Pro consult band: a flat band like the plan, never inside the stream. */
+.consult-card{flex-shrink:0;border-bottom:1px solid var(--line);background:var(--surface)}
+.consult-inner{padding-inline:max(calc(var(--pad) - 10px),calc((100% - var(--col)) / 2 - 10px))}
+.consult-heading{display:flex;align-items:center;gap:4px;min-width:0}
+.consult-head{display:flex;align-items:center;gap:10px;flex:1;min-width:0;height:32px;margin:4px 0;padding:0 10px;border-radius:8px;font-size:13px;color:var(--text-body);transition:background-color .12s var(--ease)}
+.consult-head:hover{background:var(--hover)}
+.consult-icon{flex-shrink:0;color:var(--info)}
+.consult-name{flex-shrink:0;font-weight:600;color:var(--text);white-space:nowrap}
+.consult-count{flex-shrink:0;font-size:12px;color:var(--text-3)}
+.consult-current{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)}
+.consult-head .chevron{flex-shrink:0;color:var(--text-3);transition:transform .15s var(--ease)}
+.consult-head[data-state="open"] .chevron{transform:rotate(180deg)}
+.consult-heading>.btn{color:var(--text-2)}
+.consult-body{max-height:40vh;overflow-y:auto}
+.consult-list{display:flex;flex-direction:column;margin:0;padding:0 10px 8px 36px;list-style:none}
+.consult-item{display:flex;align-items:center;gap:12px;min-width:0;padding:8px 0;border-top:1px solid var(--line-soft)}
+.consult-item:first-child{border-top:0}
+.consult-main{display:flex;flex-direction:column;flex:1;min-width:0}
+.consult-title{font-size:13px;font-weight:500;line-height:20px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.consult-meta{font-size:12px;line-height:18px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.consult-summary{color:var(--text-2)}
+.consult-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.consult-actions .btn[data-variant="ghost"]{color:var(--text-2)}
+.consult-pill{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;height:22px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:var(--muted);font-size:12px;font-weight:500;line-height:20px;color:var(--text-2);white-space:nowrap}
+.consult-pill.reading{border-color:transparent;background:var(--info-soft);color:var(--info)}
+.consult-pill.completed{border-color:transparent;background:var(--ok-soft);color:var(--ok)}
+.consult-stages{display:inline-flex;gap:2px}
+.consult-stages i{display:block;width:8px;height:4px;border-radius:2px;background:var(--progress)}
+.consult-stages i.on{background:currentColor}
+@container main (max-width:600px){.consult-current{display:none}.consult-item{flex-wrap:wrap}.consult-list{padding-left:10px}}
+
+/* Report reader: portaled outside .app-shell, so it may float. */
+.report-dialog{width:min(880px,calc(100vw - 32px))}
+.report-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.report-facts{font-size:12px;color:var(--text-3)}
+.report-actions{display:flex;gap:6px;margin-left:auto}
+.report-body{min-height:120px;max-height:62vh;overflow:auto;padding:16px 20px;border:1px solid var(--line);border-radius:10px;background:var(--surface);outline:none}
+.report-body:focus-visible{outline:2px solid var(--ring);outline-offset:1px}
+.report-state{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2)}
+.report-raw{margin:0;font:12px/18px var(--font-mono);color:var(--text-body);white-space:pre-wrap;overflow-wrap:anywhere}
+.report-foot{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.revert-dialog{width:min(680px,calc(100vw - 32px))}
+.revert-files{display:flex;flex-direction:column;max-height:52vh;overflow:auto}
+
+/* Markdown in reports: system type, 3-step text hierarchy, flat tinted blocks. */
+.md{font-size:14px;line-height:1.7;color:var(--text-body);overflow-wrap:anywhere}
+.md>:first-child{margin-top:0}
+.md :is(h2,h3,h4,h5,h6){margin:20px 0 8px;font-weight:600;line-height:1.35;color:var(--text)}
+.md .md-h1{font-size:20px;letter-spacing:-.01em}
+.md .md-h2{padding-bottom:6px;border-bottom:1px solid var(--line);font-size:17px}
+.md .md-h3{font-size:15px}
+.md :is(.md-h4,.md-h5,.md-h6){font-size:14px;color:var(--text-2)}
+.md p{margin:0 0 12px}
+.md :is(ul,ol){margin:0 0 12px;padding-left:22px}
+.md li{margin:3px 0}
+.md li>:is(ul,ol){margin:4px 0 0}
+.md li::marker{color:var(--text-3)}
+.md .md-task{list-style:none;margin-left:-20px}
+.md .md-check{display:inline-grid;place-items:center;width:14px;height:14px;margin-right:8px;border:1px solid var(--line-strong);border-radius:4px;font-size:10px;line-height:1;vertical-align:-2px;color:var(--on-inverse)}
+.md .md-check.done{border-color:var(--primary);background:var(--primary);color:#fff}
+.md strong{font-weight:600;color:var(--text)}
+.md a{color:var(--info);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-strong)}
+.md a:hover{text-decoration-color:currentColor}
+.md code{padding:1px 5px;border-radius:5px;background:var(--chip);font:12.5px/1.5 var(--font-mono);color:var(--text)}
+.md .md-code{position:relative;margin:0 0 12px;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--block);overflow:auto}
+.md .md-code code{padding:0;background:none;font:12px/1.6 var(--font-mono);color:var(--text-body);white-space:pre}
+.md .md-code-lang{position:absolute;top:6px;right:10px;font:11px var(--font-mono);color:var(--text-3)}
+.md blockquote{margin:0 0 12px;padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:var(--subtle);color:var(--text-2)}
+.md blockquote>:last-child{margin-bottom:0}
+.md hr{height:1px;margin:18px 0;border:0;background:var(--line)}
+.md .md-table-wrap{margin:0 0 12px;overflow-x:auto}
+.md table{border-collapse:collapse;font-size:13px;line-height:1.5}
+.md :is(th,td){padding:6px 10px;border:1px solid var(--line);text-align:left;vertical-align:top}
+.md th{background:var(--subtle);font-weight:600;color:var(--text)}
+.md-math{font-family:"STIX Two Math","Latin Modern Math","Cambria Math","Times New Roman",serif;font-size:1.06em;font-style:italic;color:var(--text);white-space:nowrap}
+.md-math-block{margin:0 0 12px;padding:12px 16px;border-radius:8px;background:var(--subtle);font-family:"STIX Two Math","Latin Modern Math","Cambria Math","Times New Roman",serif;font-size:16px;font-style:italic;line-height:1.8;text-align:center;color:var(--text);overflow-x:auto}
+:is(.md-math,.md-math-block) :is(sup,sub){font-size:.72em;line-height:0}
+:is(.md-math,.md-math-block) .md-upright{font-style:normal}
+:is(.md-math,.md-math-block) .md-bold{font-weight:700}
+.md-frac{display:inline-flex;flex-direction:column;align-items:center;margin:0 2px;vertical-align:middle;font-size:.9em;line-height:1.15}
+.md-frac>.md-num{padding:0 3px;border-bottom:1px solid currentColor}
+.md-frac>.md-den{padding:0 3px}
+.md-sqrt>.md-radicand{padding:0 2px;border-top:1px solid currentColor}
