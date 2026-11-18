@@ -1,5 +1,12 @@
 # macOS Fork 验证记录
 
+## macOS 1.8.1 / build 17 · 2026-11-18
+
+- `npm run test:mac` 共 56 项，55 项通过、0 失败、1 项 Windows 专用测试跳过。覆盖咨询会话归属和旧会话折叠。校验脚本拒绝缺少读取记录的回执和字节已发生变化的报告。
+- Apple Silicon 本机安装 1.8.1，App 签名校验通过，隧道 `readyz` 返回 HTTP 200。原生界面验收了报告预览、调用记录跳转和会话标题，未关联咨询没有出现在无关会话中。
+- 网页首次使用旧插件工具列表时提示读取工具不存在。刷新列表后，新 GPT-6 Pro 对话读回合成标记，报告落盘及 SHA-256 核对通过。
+- 在已登录的 T3 Default 配置中新开隐藏 Preview 标签。发送前后宿主均返回 `visible: false`。实际记录了一次 `read_research_bundle` 和一次 `submit_pro_report`。网页结果、回执和报告哈希一致，`verify-pro-consult.cjs` 以退出码 0 返回 `verified`。本次网页验收范围是 GPT-6 Pro。
+
 ## macOS 1.8.0 / build 16 · 2026-11-12
 
 - `npm run test:mac`：54 项，53 通过、1 项 Windows 专用凭据测试跳过、0 失败。新增回归覆盖 `read_research_bundle` UTF-8 字节偏移续读（`file_offsets` / `next_offset_bytes`）、`/api/snapshot` 与 `/api/native-status` 强 `ETag` / `304 Not Modified`、`/api/consult-report` 512 KB 报告读取及符号链接拒绝、`/api/restore-change` 同源鉴权与 `UNDO_CONFLICT` 冲突保护。

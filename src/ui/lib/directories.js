@@ -13,7 +13,7 @@ export function groupDirectories(conversations, query = '') {
   for (const conversation of conversations || []) {
     const path = directoryPath(conversation.path);
     const title = path ? path.split('/').filter(Boolean).pop() || path : '未设置目录';
-    if (needle && ![path, title, conversation.title || '', conversationCode(conversation), conversationLabel(conversation, conversations)].some(value => value.toLocaleLowerCase().includes(needle))) continue;
+    if (needle && ![path, title, conversationLabel(conversation), conversationIdentity(conversation)].some(value => value.toLocaleLowerCase().includes(needle))) continue;
     if (!groups.has(path)) groups.set(path, { id: path, path, title, conversations: [] });
     groups.get(path).conversations.push(conversation);
   }
@@ -30,10 +30,15 @@ export function conversationDate(row) {
   const pad = value => String(value).padStart(2, '0');
   return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
-export function conversationLabel(row, peers = []) {
+export function conversationLabel(row) {
+  if (row.display_title) return row.display_title;
   const directory = directoryPath(row.path).split('/').filter(Boolean).pop();
-  const ambiguous = !row.title || row.title === directory || row.title === 'ChatGPT 对话' || peers.filter(item => item.title === row.title).length > 1;
-  return ambiguous ? conversationSource(row) + ' · ' + (conversationDate(row) || '#' + conversationCode(row)) : row.title;
+  const placeholder = !row.title || row.title === directory || ['ChatGPT', 'ChatGPT 对话'].includes(row.title);
+  return placeholder ? '未命名会话 #' + conversationCode(row) : row.title;
 }
 export const conversationIdentity = row => '#' + conversationCode(row) + ' · ' + conversationSource(row) + (conversationDate(row) ? ' · ' + conversationDate(row) : '');
-export const conversationSummary = row => '#' + conversationCode(row) + ' · ' + (typeof row.stats?.calls === 'number' ? row.stats.calls + ' 次操作' : conversationSource(row));
+export const conversationSummary = row => [
+  conversationSource(row),
+  conversationDate(row),
+  typeof row.stats?.calls === 'number' ? (row.stats.calls ? row.stats.calls + ' 次' : '暂无操作') : '',
+].filter(Boolean).join(' · ');

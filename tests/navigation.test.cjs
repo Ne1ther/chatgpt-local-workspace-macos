@@ -49,7 +49,10 @@ precondition(groups[2].path == nil)
 let recorded = try! JSONDecoder().decode(Conversation.self, from: Data(#"{"threadId":"thread-123456abcdef","title":"project","path":"/work/project","source":"chatgpt","createdAt":"2026-10-24T03:46:51.6752190Z","stats":{"calls":4,"lastAt":"2026-10-24T04:00:00Z"}}"#.utf8))
 precondition(recorded.sourceLabel == "ChatGPT")
 precondition(recorded.createdLabel != nil && recorded.shortCode == "ABCDEF")
-precondition(recorded.displayTitle(among: [recorded]) != "project")
+precondition(recorded.readableTitle == "未命名会话 #ABCDEF")
+precondition(recorded.sidebarSummary.contains("ChatGPT"))
+let titled = try! JSONDecoder().decode(Conversation.self, from: Data(#"{"threadId":"thread-987654fedcba","title":"ChatGPT 对话","displayTitle":"热模型复核"}"#.utf8))
+precondition(titled.readableTitle == "热模型复核")
 let repeated = (0..<7).map { index in Conversation(threadId: "thread-session-" + String(index), title: "project", path: "/work/project") }
 let history = WorkspaceDirectory.grouped(repeated, activity: [])[0]
 precondition(history.visibleConversations(expanded: false, selected: "").count == 3)
@@ -69,9 +72,22 @@ test('same-name host sessions get distinct labels, preserve identity and sort by
   const group = groupDirectories(rows)[0];
   assert.equal(group.conversations.length, 7);
   assert.equal(group.conversations[0].thread_id, 'thread-session-6');
-  assert.equal(new Set(rows.map(row => conversationLabel(row, rows))).size, 7);
+  assert.equal(new Set(rows.map(conversationLabel)).size, 7);
   assert.equal(new Set(rows.map(conversationIdentity)).size, 7);
-  assert(rows.every(row => conversationLabel(row, rows).startsWith('ChatGPT · ')));
+  assert(rows.every(row => conversationLabel(row).startsWith('未命名会话 #')));
+  assert.equal(groupDirectories([{ ...rows[0], display_title: '热模型复核' }], '热模型复核')[0].conversations[0].thread_id, rows[0].thread_id);
   assert.equal(groupDirectories(rows, 'SION-3')[0].conversations[0].thread_id, 'thread-session-3');
   assert.equal(rows[0].title, 'project', 'presentation must not rewrite recorded titles');
+});
+
+test('unread Web Pro consultations stay out of unrelated conversations', async () => {
+  const { consultsFor, proPrompt } = await import('../src/ui/lib/consult.js');
+  const staged = { consult_id: 'pending', status: 'staged' };
+  const completed = { consult_id: 'ready', status: 'completed', thread_id: 'thread-pro' };
+  const snapshot = { consults: [staged, completed] };
+  assert.deepEqual(consultsFor(snapshot, ''), [staged, completed]);
+  assert.deepEqual(consultsFor(snapshot, 'unassigned'), [staged]);
+  assert.deepEqual(consultsFor(snapshot, 'thread-other'), []);
+  assert.deepEqual(consultsFor(snapshot, 'thread-pro'), [completed]);
+  assert.match(proPrompt(staged), /file_offsets.*next_offset_bytes.*size_bytes/);
 });

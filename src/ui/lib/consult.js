@@ -28,8 +28,8 @@ export function consultField(detail, key) {
 export const consultNumber = (detail, key) => { const value = Number(consultField(detail, key)); return Number.isFinite(value) ? value : 0; };
 
 export const CONSULT_STAGES = [
-  { key: 'staged', label: '已打包' },
-  { key: 'reading', label: 'Web Pro 读取中' },
+  { key: 'staged', label: '等待网页读取' },
+  { key: 'reading', label: '等待报告' },
   { key: 'completed', label: '报告已归档' },
 ];
 
@@ -44,7 +44,7 @@ export const consultTime = consult => {
 
 export function consultsFor(snapshot, thread) {
   const list = Array.isArray(snapshot?.consults) ? snapshot.consults.filter(item => item && item.consult_id) : [];
-  return list.filter(item => !thread || !item.thread_id || item.thread_id === 'unassigned' || item.thread_id === thread).sort((a, b) => consultTime(b) - consultTime(a));
+  return list.filter(item => !thread || (item.thread_id || 'unassigned') === thread).sort((a, b) => consultTime(b) - consultTime(a));
 }
 
 // What the user pastes into ChatGPT Web Pro. The server's own prompt wins when present.
@@ -52,10 +52,10 @@ export function proPrompt(consult) {
   if (consult?.web_pro_prompt) return consult.web_pro_prompt;
   const id = consult?.consult_id || '';
   return [
-    '请使用 ChatGPT Codex Workspace 连接器完成这次研究咨询：',
-    '1. 调用 read_research_bundle，参数 consult_id: "' + id + '"，完整读取资料包；若返回 next_offset_bytes，请用 offset_bytes 继续读取直到读完。',
+    '请使用 Local Workspace Mac 插件完成这次研究咨询：',
+    '1. 调用 read_research_bundle，参数 consult_id: "' + id + '"。若被截断，使用 file_offsets，按绝对路径传入 next_offset_bytes，已读完的文件传 size_bytes。',
     consult?.instructions ? '2. 按资料包说明完成研究：' + consult.instructions : '2. 按资料包内的说明完成研究。',
-    '3. 调用 submit_pro_report，参数 consult_id: "' + id + '"，提交完整的 Markdown 报告（含标题与摘要）。',
+    '3. 用 submit_pro_report 和同一咨询编号提交完整 Markdown，返回报告路径和 SHA-256。若工具不可用，请报告错误，提示刷新网页插件工具后再试。',
   ].join('\n');
 }
 

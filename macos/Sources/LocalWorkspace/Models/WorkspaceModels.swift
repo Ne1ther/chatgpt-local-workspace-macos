@@ -1,7 +1,7 @@
 import Foundation
 
 enum Destination: String, CaseIterable, Identifiable {
-    case workbench = "工作台", consult = "科研咨询", overview = "概览", activity = "操作记录", access = "本地能力", logs = "诊断日志"
+    case consult = "Web Pro 咨询", workbench = "工作台", overview = "概览", activity = "操作记录", access = "本地能力", logs = "诊断日志"
     var id: Self { self }
     var symbol: String {
         switch self {
@@ -79,6 +79,7 @@ struct Conversation: Decodable, Identifiable, Equatable, Sendable {
     var source: String? = nil
     var createdAt: String? = nil
     var stats: ConversationStatistics? = nil
+    var displayTitle: String? = nil
     var id: String { threadId }
     var sourceLabel: String { source == "codex" ? "Codex" : source == "chatgpt" ? "ChatGPT" : "本地会话" }
     var shortCode: String { String(threadId.replacingOccurrences(of: "thread-", with: "").suffix(6)).uppercased() }
@@ -94,13 +95,17 @@ struct Conversation: Decodable, Identifiable, Equatable, Sendable {
         guard let createdAt, let date = Self.fractionalTimestamp.date(from: createdAt) ?? Self.timestamp.date(from: createdAt) else { return nil }
         return Self.displayDate.string(from: date)
     }
-    func displayTitle(among peers: [Conversation]) -> String {
+    var readableTitle: String {
+        if let displayTitle, !displayTitle.isEmpty { return displayTitle }
         let directory = path.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.lastPathComponent }
-        let ambiguous = title == directory || title == "ChatGPT 对话" || title.isEmpty || peers.filter { $0.title == title }.count > 1
-        return ambiguous ? sourceLabel + " · " + (createdLabel ?? "#" + shortCode) : title
+        let placeholder = title.isEmpty || title == directory || title == "ChatGPT 对话" || title == "ChatGPT"
+        return placeholder ? "未命名会话 #" + shortCode : title
     }
     var identityLine: String { "#" + shortCode + " · " + sourceLabel + (createdLabel.map { " · " + $0 } ?? "") }
-    var sidebarSummary: String { "#" + shortCode + " · " + (stats?.calls.map { "\($0) 次操作" } ?? sourceLabel) }
+    var sidebarSummary: String {
+        [sourceLabel, createdLabel, stats?.calls.map { $0 == 0 ? "暂无操作" : "\($0) 次" }]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
 }
 
 struct ConversationStatistics: Decodable, Equatable, Sendable {
@@ -225,8 +230,8 @@ struct ConsultSessionSummary: Codable, Identifiable, Equatable, Sendable {
     var statusLabel: String {
         switch status {
         case "completed": "报告已归档"
-        case "reading": "Web Pro 读取中"
-        default: "已打包待读取"
+        case "reading": "等待报告"
+        default: "等待网页读取"
         }
     }
     private static let timestamp = ISO8601DateFormatter()

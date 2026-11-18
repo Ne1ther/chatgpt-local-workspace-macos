@@ -226,12 +226,15 @@ export function App() {
   useLayoutEffect(() => { if (bottomRef.current) toBottom(); }, [visible.length, thread, query, state, !!snapshot]);
 
   const current = metadata ? (metadata.conversations || []).find(row => row.thread_id === thread) : null;
-  const title = current ? conversationLabel(current, metadata.conversations || []) : (thread === 'unassigned' ? '未归属操作' : '全部操作');
+  const title = current ? conversationLabel(current) : (thread === 'unassigned' ? '未归属操作' : '全部操作');
   const startedAt = current ? createdAt(current) ?? (rows[0] && rows[0].start) : (rows[0] && rows[0].start) || undefined;
   const lastAt = (stats[thread] || {}).lastAt;
   const connection = paused ? '已暂停' : error ? '已断开' : snapshot ? '实时' : '连接中';
   const connectionState = paused ? 'paused' : error ? 'error' : snapshot ? 'live' : '';
-  const threadName = id => ((metadata && (metadata.conversations || []).find(row => row.thread_id === id)) || {}).title || '未归属';
+  const threadName = id => {
+    const conversation = metadata?.conversations?.find(row => row.thread_id === id);
+    return conversation ? conversationLabel(conversation) : '未归属';
+  };
 
   const say = (text, tone) => {
     clearTimeout(noticeRef.current);

@@ -90,9 +90,28 @@ static class WorkspaceThreads
         if(name.Length==0)name="工作区 "+DateTime.UtcNow.ToString("HH:mm");
         return name.Length>120?name.Substring(0,120):name;
     }
-    public static object[] List(Func<string,int> runningCommands=null)
+    static string DisplayTitle(Conversation conversation, IDictionary<string,string> consults, IDictionary<string,string> plans, IDictionary<string,string> files)
+    {
+        if(conversation.Named && !String.IsNullOrWhiteSpace(conversation.Title))return conversation.Title;
+        string title;
+        if(consults.TryGetValue(conversation.Id,out title))return title;
+        if(plans.TryGetValue(conversation.Id,out title))return title;
+        if(files.TryGetValue(conversation.Id,out title))return title;
+        if(!String.IsNullOrEmpty(conversation.Title) && conversation.Title!="ChatGPT 对话" &&
+           conversation.Title!="ChatGPT" && conversation.Title!=DeriveTitle(conversation.Path))return conversation.Title;
+        return "未命名会话 #"+conversation.Id.Substring(Math.Max(0,conversation.Id.Length-6)).ToUpperInvariant();
+    }
+    public static object[] List(Func<string,int> runningCommands=null, Dictionary<string,object>[] consults=null)
     {
         Conversation[] items;lock(Gate)items=Items.ToArray();
-        return items.Select(c=>new{thread_id=c.Id,title=c.Title,path=c.Path,chat_id=c.ChatId,chat_url=c.ChatId.Length==0?null:"https://chatgpt.com/c/"+c.ChatId,association=c.HostKey==null?"manual":"host_session",source=Source(c.HostKey),created_at=c.Created.ToString("o"),stats=WorkspaceActivity.StatsFor(c.Id,runningCommands==null?0:runningCommands(c.Id))}).ToArray();
+        var consultTitles=new Dictionary<string,string>();
+        foreach(var consult in consults??new Dictionary<string,object>[0]){
+            string thread=(string)consult["thread_id"],title=(string)consult["title"];
+            if(!String.IsNullOrEmpty(thread) && thread!="unassigned" && !String.IsNullOrWhiteSpace(title) && !consultTitles.ContainsKey(thread))
+                consultTitles.Add(thread,title);
+        }
+        var planTitles=WorkspaceTasks.ConversationTitles();
+        var fileTitles=WorkspaceActivity.ConversationTitles();
+        return items.Select(c=>new{thread_id=c.Id,title=c.Title,display_title=DisplayTitle(c,consultTitles,planTitles,fileTitles),path=c.Path,chat_id=c.ChatId,chat_url=c.ChatId.Length==0?null:"https://chatgpt.com/c/"+c.ChatId,association=c.HostKey==null?"manual":"host_session",source=Source(c.HostKey),created_at=c.Created.ToString("o"),stats=WorkspaceActivity.StatsFor(c.Id,runningCommands==null?0:runningCommands(c.Id))}).ToArray();
     }
 }

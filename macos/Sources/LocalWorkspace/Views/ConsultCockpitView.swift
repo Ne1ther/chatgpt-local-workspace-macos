@@ -42,19 +42,25 @@ struct ConsultCockpitView: View {
             HStack(alignment: .top, spacing: 16) {
                 WorkspaceSymbol(name: "sparkles.rectangle.stack", size: 42)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("科研咨询")
+                    Text("Web Pro 咨询")
                         .font(.system(size: 25, weight: .semibold))
-                    Text("T3 Code ⇄ ChatGPT Web Pro 零剪贴板科研咨询管线：本地打包研究资料包、Web Pro 直接读取分析、研究报告自动归档回写。")
+                    Text("把咨询指令发给已启用 Local Workspace Mac 的 Pro 对话。报告和 SHA-256 回执会出现在这里。")
                         .font(.callout)
                         .foregroundStyle(WorkspacePalette.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 12)
                 HStack(spacing: 8) {
-                    countPill(label: "已打包", count: stagedCount, tint: WorkspacePalette.blue)
-                    countPill(label: "读取中", count: readingCount, tint: WorkspacePalette.orange)
+                    countPill(label: "等待读取", count: stagedCount, tint: WorkspacePalette.blue)
+                    countPill(label: "等待报告", count: readingCount, tint: WorkspacePalette.orange)
                     countPill(label: "已归档", count: completedCount, tint: WorkspacePalette.teal)
                 }
+            }
+            HStack(spacing: 14) {
+                Link("打开 ChatGPT", destination: URL(string: "https://chatgpt.com/")!)
+                    .font(.callout.weight(.medium))
+                Link("网页插件设置", destination: URL(string: "https://chatgpt.com/settings/plugins-settings")!)
+                    .font(.callout)
             }
         }
         .padding(WorkspaceStyle.pagePadding)
@@ -82,7 +88,7 @@ struct ConsultCockpitView: View {
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("暂无科研咨询会话", systemImage: "sparkles.rectangle.stack")
+            Label("暂无 Web Pro 咨询", systemImage: "sparkles.rectangle.stack")
         } description: {
             Text("当 T3 Code 发起 `--stage-consult` 或 Web Pro 调用 `read_research_bundle` / `submit_pro_report` 时，资料包校验与报告归档状态将实时显示在这里。")
         } actions: {
@@ -105,13 +111,15 @@ struct ConsultCockpitView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 5) {
+                        Text(session.title.isEmpty ? session.consultId : session.title)
+                            .font(.headline)
+                            .foregroundStyle(WorkspacePalette.text)
                         HStack(spacing: 8) {
-                            Text(session.title.isEmpty ? session.consultId : session.title)
-                                .font(.headline)
-                                .foregroundStyle(WorkspacePalette.text)
-                            Text("#\(session.consultId)")
+                            Text(session.consultId)
                                 .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
                             if let updated = session.updatedLabel {
                                 Text("· \(updated)")
                                     .font(.caption)
@@ -226,11 +234,11 @@ struct ConsultCockpitView: View {
 
                     Spacer()
 
-                    if let threadId = session.threadId, !threadId.isEmpty {
+                    if let threadId = session.threadId, store.conversations.contains(where: { $0.id == threadId }) {
                         Button {
                             store.selectConversation(threadId)
                         } label: {
-                            Label("关联工作台会话", systemImage: "arrow.right.circle")
+                            Label("查看调用记录", systemImage: "arrow.right.circle")
                         }
                         .buttonStyle(.plain)
                         .font(.caption)
@@ -244,9 +252,9 @@ struct ConsultCockpitView: View {
 
     private func consultStepper(stage: Int) -> some View {
         let steps: [(index: Int, title: String, subtitle: String, icon: String)] = [
-            (1, "1. 已打包 Staged", "研究资料包已生成并计算 SHA-256", "shippingbox.fill"),
-            (2, "2. Web Pro 读取中", "read_research_bundle 读取材料", "sparkles"),
-            (3, "3. 报告已归档 Completed", "submit_pro_report 落盘校验完成", "checkmark.seal.fill")
+            (1, "资料已打包", "本地生成资料清单和 SHA-256", "shippingbox.fill"),
+            (2, "网页已调用读取", "read_research_bundle", "sparkles"),
+            (3, "报告已归档", "submit_pro_report", "checkmark.seal.fill")
         ]
         return HStack(spacing: 10) {
             ForEach(steps, id: \.index) { step in

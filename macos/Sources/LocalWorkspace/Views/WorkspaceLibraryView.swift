@@ -10,7 +10,7 @@ struct WorkspaceLibraryView: View {
     private var directories: [WorkspaceDirectory] {
         WorkspaceDirectory.grouped(store.conversations, activity: store.activity).compactMap { directory in
             let matchesDirectory = query.isEmpty || directory.displayPath.localizedStandardContains(query) || directory.title.localizedStandardContains(query)
-            let rows = matchesDirectory ? directory.conversations : directory.conversations.filter { ($0.title + " " + $0.identityLine).localizedStandardContains(query) }
+            let rows = matchesDirectory ? directory.conversations : directory.conversations.filter { ($0.readableTitle + " " + $0.identityLine).localizedStandardContains(query) }
             return rows.isEmpty ? nil : WorkspaceDirectory(id: directory.id, path: directory.path, conversations: rows, latestActivity: directory.latestActivity)
         }
     }
@@ -100,7 +100,7 @@ struct WorkspaceLibraryView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "bubble.left").foregroundStyle(.secondary).frame(width: 22)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(conversation.displayTitle(among: directory.conversations)).font(.callout.weight(.medium)).lineLimit(1)
+                            Text(conversation.readableTitle).font(.callout.weight(.medium)).lineLimit(1)
                                 .foregroundStyle(WorkspacePalette.text)
                             Text(conversation.identityLine).font(.caption).foregroundStyle(WorkspacePalette.secondaryText).lineLimit(1)
                         }
@@ -123,7 +123,7 @@ struct WorkspaceLibraryView: View {
                 .onHover { isHovering in
                     hoveredID = isHovering ? conversation.id : (hoveredID == conversation.id ? nil : hoveredID)
                 }
-                .accessibilityLabel("打开会话：\(conversation.displayTitle(among: directory.conversations))，\(conversation.shortCode)")
+                .accessibilityLabel("打开会话：\(conversation.readableTitle)，\(conversation.identityLine)")
             }
         }
         .background(WorkspacePalette.surface, in: RoundedRectangle(cornerRadius: 12))

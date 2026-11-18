@@ -114,6 +114,26 @@ static class WorkspaceActivity
     {
         lock(Gate)return Entries.Select(x=>new{thread_id=x.ThreadId,id=x.Id,tool=x.Tool,target=x.Target,status=x.Status,started_at=x.Started.ToString("o"),elapsed_ms=x.Status=="running"?(long)(DateTime.UtcNow-x.Started).TotalMilliseconds:x.Elapsed,error_code=x.Error}).ToArray();
     }
+    public static Dictionary<string,string> ConversationTitles()
+    {
+        var titles=new Dictionary<string,string>();
+        lock(Gate){
+            foreach(var entry in Entries.AsEnumerable().Reverse()){
+                if(String.IsNullOrEmpty(entry.ThreadId) || entry.Status!="returned" ||
+                   String.IsNullOrEmpty(entry.Target) || titles.ContainsKey(entry.ThreadId))continue;
+                string action;
+                switch(entry.Tool){
+                    case "read_file": case "read_image": action="读取";break;
+                    case "edit_file": case "write_file": action="编辑";break;
+                    default: continue;
+                }
+                string target=entry.Target.Replace('\\','/');
+                string name=target.Substring(target.LastIndexOf('/')+1);
+                if(name.Length>0)titles.Add(entry.ThreadId,action+" "+name);
+            }
+        }
+        return titles;
+    }
     public static Dictionary<string,object> TaskObservation(string path,string thread)
     {
         lock(Gate){var rows=Proofs.Where(e=>e.ThreadId==thread&&Within(e.Target,path)&&!new[]{"update_plan","check_task_completion","get_workspace_status","read_workspace_activity","open_workspace"}.Contains(e.Tool)).ToArray();

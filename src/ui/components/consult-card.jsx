@@ -12,7 +12,7 @@ import { bytes, stamp } from '@/lib/format.js';
 const stored = (key, fallback) => { try { const value = localStorage.getItem(key); return value == null ? fallback : value === 'true'; } catch { return fallback; } };
 const store = (key, value) => { try { localStorage.setItem(key, String(value)); } catch { /* private mode */ } };
 
-// Three-stage pill: 已打包 -> Web Pro 读取中 -> 报告已归档, with the passed stages as ticks.
+// Three-stage pill based on completed bridge events, not live model activity.
 export function StagePill({ status, compact }) {
   const index = stageIndex(status);
   return (
@@ -22,7 +22,6 @@ export function StagePill({ status, compact }) {
           {CONSULT_STAGES.map((stage, at) => <i key={stage.key} className={at <= index ? 'on' : ''} />)}
         </span>
       )}
-      {status === 'reading' ? <SpinIcon size={11} /> : null}
       <span>{stageLabel(status)}</span>
     </span>
   );

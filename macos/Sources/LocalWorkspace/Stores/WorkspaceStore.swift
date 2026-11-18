@@ -5,7 +5,7 @@ import UserNotifications
 
 @MainActor @Observable
 final class WorkspaceStore {
-    var destination: Destination? = .workbench
+    var destination: Destination? = .consult
     var selectedThreadID = ""
     var showsAllActivity = false
     var state: ConnectionState = .stopped
@@ -342,7 +342,6 @@ final class WorkspaceStore {
                         guard generation == expected else { return }
                         state = .connected; busy = false; operationMessage = ""
                         log("隧道已就绪。请在 ChatGPT 刷新插件并调用 get_workspace_status 验证实际连接。")
-                        destination = .workbench
                         return
                     }
                     try await Task.sleep(for: .milliseconds(750))

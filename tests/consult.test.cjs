@@ -107,6 +107,12 @@ test('consultation bridge: bounded reads, access checks, immutable reports and c
       assert.equal(read.total_bytes, read.files.reduce((n, x) => n + Buffer.byteLength(x.content), 0));
       for (const f of read.files) { assert.equal(f.sha256, sha(fs.readFileSync(f.path))); assert.equal(f.size_bytes, fs.statSync(f.path).size); }
       const status = cli(['--consult-status', '--id', 'review-1']); assert.equal(status.status, 'reading'); assert.equal(status.bundle_sha256, read.bundle_sha256); assert(status.thread_id); assert(status.last_read_at);
+      for (const endpoint of ['/api/snapshot', '/api/native-status']) {
+        const snapshot = JSON.parse((await request(endpoint)).text);
+        const conversation = snapshot.conversations.find(row => row.thread_id === status.thread_id);
+        assert.equal(conversation.title, 'ChatGPT 对话');
+        assert.equal(conversation.display_title, 'Test consultation');
+      }
       const fromManifest = await tool('read_research_bundle', { bundle_path: staged.bundle_path }); assert.equal(fromManifest.file_count, 2); assert.equal(fromManifest.consult_id, 'review-1');
       assert.equal((await tool('read_research_bundle', { bundle_path: brief })).file_count, 1);
       assert.equal((await tool('read_research_bundle', { bundle_path: JSON.stringify({ paths: [brief] }), paths: [brief] })).file_count, 1);
@@ -241,6 +247,24 @@ test('consultation bridge: bounded reads, access checks, immutable reports and c
       const done = new Promise(resolve => waiter.once('close', resolve));
       await tool('submit_pro_report', { consult_id: 'wait-1', content: '# Wait done' });
       assert.equal(await done, 0, err); assert.equal(JSON.parse(out).status, 'completed');
+    });
+    await t.test('T3 handoff verifies staged inputs and actual report bytes', async () => {
+      const verify = (id, exitCode) => {
+        const script = path.resolve(__dirname, '../scripts/verify-pro-consult.cjs');
+        const result = spawnSync(process.execPath, [script, id], {
+          env: { ...env, WORKSPACE_TEST_EXE: exe }, encoding: 'utf8', timeout: 5000,
+        });
+        assert.equal(result.status, exitCode, result.stdout + result.stderr);
+        return JSON.parse(result.stdout);
+      };
+      cli(['--stage-consult', '--id', 't3-handoff', '--inbox', inbox, '--file', brief]);
+      assert.equal(verify('t3-handoff', 2).status, 'staged');
+      assert.match(verify('wait-1', 1).error, /no recorded read/);
+      await tool('read_research_bundle', { consult_id: 't3-handoff' });
+      const receipt = await tool('submit_pro_report', { consult_id: 't3-handoff', content: '# Test report' });
+      assert.equal(verify('t3-handoff', 0).sha256, receipt.sha256);
+      fs.writeFileSync(receipt.report_path, '# Changed report');
+      assert.match(verify('t3-handoff', 1).error, /bytes and receipt do not match/);
     });
   } finally {
     child.stdin.end(); await exited;

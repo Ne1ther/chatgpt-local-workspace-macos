@@ -76,15 +76,15 @@ struct ContentView: View {
                             ForEach(directory.visibleConversations(expanded: expandedConversationGroups.contains(directory.id), selected: store.selectedThreadID)) { conversation in
                             Label {
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(conversation.displayTitle(among: directory.conversations)).lineLimit(1)
+                                    Text(conversation.readableTitle).font(.system(size: 13, weight: .medium)).lineLimit(1)
                                         .foregroundStyle(selectionColor(store.destination == .workbench && store.selectedThreadID == conversation.id))
-                                    Text(conversation.sidebarSummary).font(.system(size: 10.5)).lineLimit(1)
+                                    Text(conversation.sidebarSummary).font(.system(size: 11)).lineLimit(1)
                                         .foregroundStyle(store.destination == .workbench && store.selectedThreadID == conversation.id && controlActiveState != .inactive ? Color.white.opacity(0.9) : WorkspacePalette.secondaryText)
                                 }
                             } icon: {
                                 sidebarSymbol("bubble.left", color: .secondary, selected: store.destination == .workbench && store.selectedThreadID == conversation.id)
                             }
-                            .help(conversation.title + "\n" + conversation.identityLine)
+                            .help(conversation.readableTitle + "\n" + conversation.identityLine)
                             .tag(SidebarSelection.conversation(conversation.id))
                             }
                             if directory.conversations.count > 3 && (expandedConversationGroups.contains(directory.id) || directory.visibleConversations(expanded: false, selected: store.selectedThreadID).count < directory.conversations.count) {
@@ -132,7 +132,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(18)
             }
-            .frame(width: 256)
+            .frame(width: 280)
             .background(SidebarVibrancyView().ignoresSafeArea())
             .transition(.move(edge: .leading).combined(with: .opacity))
             Divider()

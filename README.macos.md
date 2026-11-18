@@ -4,12 +4,12 @@
 
 这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的独立 macOS 移植，保留原 macOS 移植并选择性纳入上游 **2.4.1 / f2ab383**。保留原作者与贡献者的 MIT 许可和署名；不是 OpenAI 官方应用，也不代表上游作者发布。
 
-**当前版本为 macOS 1.8.0 / build 16，核心 2.4.1，公开 25 个工具并兼容 5 个旧名称。** 历史安装包见 [macos-v1.7.0 Release](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.7.0)，最新 1.8.0 可直接按下方步骤从源码构建安装。
+**当前源码版本为 macOS 1.8.1 / build 17，核心 2.4.1，公开 25 个工具并兼容 5 个旧名称。** 1.8.1 可按下方步骤从源码构建。GitHub Release 提供 1.7.0 安装包。
 
 ## 下载安装（无需编译）
 
 - 当前已在 Apple Silicon Mac 上构建、运行和验证。最低部署目标为 macOS 14；较旧系统和 Intel Mac 未做实机验证。
-- 打开 **[macOS 1.4.1 下载](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.4.1)**，在 Assets 中下载 `ChatGPT-Codex-Workspace-1.4.1-arm64.dmg`。`arm64` 对应 M 系列 Apple Silicon Mac；本次不提供 Intel 包。`Source code` 是源码，不是安装包。
+- 在 Release 的 Assets 中下载 `ChatGPT-Codex-Workspace-1.7.0-arm64.dmg`（Apple Silicon）。 [macOS 1.7.0 下载](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.7.0)
 - 打开 DMG，将 **ChatGPT Codex Workspace.app** 拖入 **Applications（应用程序）**，再从应用程序或 Spotlight 启动。若选择 ZIP，解压后将 `.app` 拖入应用程序即可。
 - 应用内含原生界面、工作台、本地工具和官方 Tunnel Client。**使用时不需要安装 Node、Python 或 .NET。** 执行 Git 工具需要系统已有 Git；执行其他开发命令仍需要用户安装相应软件。
 - 后续更新仍从 Releases 下载新版，先从应用菜单明确退出旧版，再用新版替换应用程序中的 `.app`；关闭窗口不等于退出。已有 Tunnel ID、钥匙串中的运行密钥和显示偏好独立于 `.app`，更新时保留，不需要重新编译。
@@ -17,7 +17,7 @@
 
 ### 首次打开与 macOS 安全提示
 
-当前社区安装包为 **ad-hoc 签名，尚未进行 Developer ID 签名和 Apple 公证**，不能将它当作已公证应用。macOS 可能在首次打开时提示“无法验证开发者”或“Apple 无法检查”。
+macOS 可能在首次打开社区安装包时提示“无法验证开发者”或“Apple 无法检查”。
 
 确认安装包来自本仓库 Releases 后，先尝试打开应用，再进入 **系统设置 → 隐私与安全性 → 仍要打开**，并确认打开。具体步骤见 [Apple 官方说明](https://support.apple.com/en-us/102445)。不需要关闭系统的 Gatekeeper。
 
@@ -30,7 +30,7 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 1. 按 [OpenAI Secure MCP Tunnel 官方指南](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) 获取 Tunnel ID 和运行 API Key，并准备 ChatGPT 开发者模式连接。Tunnel 权限与 ChatGPT 开发者模式权限分别管理。
 2. 在本应用打开 **连接与显示（⌘,）**，填写两个值，选择“保存并连接”。密钥保存在本机钥匙串，Tunnel ID 保存在应用偏好设置。请在应用内填写密钥，不要贴到聊天或源码里。
 3. 等 Mac 应用显示“隧道已就绪”后，打开 ChatGPT 的 Plugins 页面，点击加号 → **Add custom MCP server**。填写名称（例如 Local Workspace Mac）和简介，在 Connection 中选择 **Tunnel**，选本应用使用的同一个 Tunnel ID；按页面要求核对认证及连接信息，选择 **Create as a plugin**，检查发现的工具列表并安装该插件。
-4. 新开一个 ChatGPT 对话，在工具菜单启用刚创建的插件，然后输入“调用 `get_workspace_status` 确认连接”。本地 1.7.0 版本的响应包含 `version: 2.4.1`、`tool_count: 25`（已发布 1.4.1 为核心 2.3.0、28 个工具）、`default_shell: zsh` 和实际 Mac 程序路径。
+4. 新开一个 ChatGPT 对话，在工具菜单启用刚创建的插件，然后输入“调用 `get_workspace_status` 确认连接”。1.7.0 和 1.8.1 的响应包含 `version: 2.4.1`、`tool_count: 25`、`default_shell: zsh` 和实际 Mac 程序路径。
 5. 之后可以直接说“在 `<项目绝对路径>` 里先读取 AGENTS.md、列出目录，不修改文件”，再按需交代具体编辑任务。桌面应用的“实时工作台”显示每次调用、命令输出和修改对比；结束时点“停止”或退出应用。
 
 隧道就绪不代表 ChatGPT 已调用成功。初次调用前，工作台可能显示“等待首次调用”；“诊断连接”会区分隧道状态、工具发现与实际调用。应用必须保持运行，ChatGPT 才能通过该 Tunnel 使用这台 Mac 的工具。
@@ -52,6 +52,11 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 ### 后台运行与显示位置
 
 关闭主窗口的红色按钮**不会退出应用或断开连接**，已启动的 Tunnel 和本地任务继续运行。默认同时显示菜单栏图标和 Dock 图标；在“连接与显示 → 显示与后台”可独立控制，两项可以同时开启或同时关闭。关闭“在 Dock 显示”后，打开或关闭主窗口和设置窗口均保持隐藏，不再留下运行中的 Dock 图标。两项都关闭时，用 Spotlight 搜索 ChatGPT 或 Codex，或从 Finder 打开应用，即可恢复同一个进程中的主窗口。点击菜单栏图标可打开主窗口、查看连接状态、停止连接或明确退出；Dock 图标也能重新打开主窗口。只有选择“退出 ChatGPT Codex Workspace”或按 `⌘Q` 才会结束应用和它拥有的后台进程。“停止连接”只断开本次服务，应用仍留在后台。
+
+### macOS 1.8.1 / 上游核心 2.4.1
+
+- 启动后打开「Web Pro 咨询」，可查看待处理咨询、预览已归档报告，并进入 ChatGPT 或网页插件设置。已关联的咨询在对应工作台会话中显示，未关联的咨询在全局咨询页查看。
+- 会话优先显示已登记的名称、关联咨询标题、计划首项或最近的文件操作。没有标题线索时显示「未命名会话」和短编号。来源与时间放在第二行。
 
 ### macOS 1.8.0 / 上游核心 2.4.1
 
@@ -119,7 +124,9 @@ Releases 附有 `SHA256SUMS.txt`。需要核对下载完整性时，将 DMG/ZIP 
 
 ## 已完成的验证
 
-以下为开发阶段的验证记录；1.6.2 的新增功能与验证边界见 [1.6 记录](docs/LOCAL-CAPABILITIES-1.6.md)。
+1.8.1 已验证真实 GPT-6 Pro 的后台发送、资料读取、报告回写和 SHA-256 核验。 [按版本查看验证记录](VERIFICATION.md)
+
+以下为早期开发阶段的验证记录。 [1.6 系列能力说明](docs/LOCAL-CAPABILITIES-1.6.md)
 
 - 原生 `.app` 编译、启动及实际 SwiftUI / WKWebView 窗口检查。
 - 在隔离临时目录中逐个调用 23 个公开工具及 5 个兼容旧工具，并校验返回结构；实际中文、空格、引号路径读写，BOM 保留，多文件增改移删及路径越界拒绝。
@@ -156,18 +163,26 @@ npm run clean:macos                   # 构建后移除项目内的 SDK、依赖
 
 上游 Windows 使用方式与原有发布记录保留在 `README.md` 的上游说明区。此 Fork 由 Ne1ther 维护 macOS 适配；不会直接推送到上游主分支。
 
-## T3 Code ↔ ChatGPT Web Pro 咨询（1.7.0）
+## T3 Code ↔ ChatGPT Web Pro 咨询
 
-T3 Code 在本机暂存资料，将 CLI 返回的 `web_pro_prompt` 发到已启用此插件的 ChatGPT Web Pro 对话。Pro 调用 `read_research_bundle` 阅读并按要求完成咨询，再用 `submit_pro_report` 将完整 Markdown 报告及收据存入 inbox。CLI 只负责交接，不自动控制浏览器或发送对话。更新后先在 ChatGPT 插件设置中刷新工具列表。
+T3 Code 在本机暂存资料，将 CLI 返回的 `web_pro_prompt` 发到已启用 Local Workspace Mac 的 ChatGPT Web Pro 对话。Pro 调用 `read_research_bundle` 读取资料，再用 `submit_pro_report` 将完整 Markdown 和 SHA-256 回执存入收件箱。CLI 提供暂存、查询和等待。如果网页报工具不可用，在 ChatGPT 的「插件设置 → Local Workspace Mac → 刷新工具」重新获取定义，再用新对话测试。
 
 ```sh
 SERVER="/Applications/ChatGPT Codex Workspace.app/Contents/Resources/Backend/workspace-server"
 "$SERVER" --stage-consult --id design-review --inbox /absolute/project/inbox \
   --title "Design review" --instructions "Evaluate the evidence and give actionable findings." \
   --brief /absolute/project/brief.md --file /absolute/project/results.json
-"$SERVER" --consult-status --id design-review --wait-seconds 300
+node scripts/verify-pro-consult.cjs design-review 300
 "$SERVER" --consult-list
 ```
+
+### 在 T3 编排中后台发起
+
+用户明确要求用 Web Pro 时，由 T3 主控分配咨询编号、暂存材料和验收结果。首次在 T3 Preview 的 Default 配置中登录 ChatGPT，并确认该账号已有 Local Workspace Mac。日常 Edge 的登录状态和这个配置独立。
+
+1. 在 T3 用 `preview_status` 确认配置，再以 `preview_open` 的 `open: false` 打开专用标签，检查 `visible: false`。在隐藏页选择 Pro、用 `@` 添加 Local Workspace Mac，再把暂存命令返回的 `web_pro_prompt` 发一次。登录、模型或插件不可用时向用户报告具体阻塞。
+2. 把原咨询编号交给 `node scripts/verify-pro-consult.cjs <consult_id> 300`。进程退出 `0` 且返回 `status: "verified"` 时，T3 用返回的 `report_path` 接着工作。该命令核对读取记录、原始资料包摘要、回执和报告实际 SHA-256。
+3. 退出 `2` 代表仍在等待，继续查同一编号。退出 `1` 代表查询或校验失败，查看 JSON 中的错误。发送结果不明确时，先查看原标签和咨询状态，避免重复发请求。
 
 每个咨询使用新 ID（字母、数字、点、下划线或连字符，1–80 字符）。所有路径须为绝对路径，最多 20 个文件。默认每文件返回 64 KiB、总计 384 KiB；哈希对应完整文件，截断内容有明确标记。资料包是路径清单，不是内容快照；文件若更改，读取时哈希随之更改。报告同内容可安全重试，不同内容另存时间戳文件，旧报告和收据不被覆盖。
 

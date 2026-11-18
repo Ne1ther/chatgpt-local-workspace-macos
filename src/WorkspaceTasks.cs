@@ -43,6 +43,12 @@ static class WorkspaceTasks
         return View(plan);
     }
     static Plan[] Select(string path,string thread){lock(Gate)return Plans.Values.Where(p=>(thread.Length==0||p.Thread==thread)&&WorkspaceActivity.Within(p.Path,path)).ToArray();}
+    public static Dictionary<string,string> ConversationTitles()
+    {
+        return Select("","").Where(p=>!String.IsNullOrEmpty(p.Thread) && p.Steps!=null && p.Steps.Length>0)
+            .OrderByDescending(p=>p.Updated).ThenBy(p=>p.Path,StringComparer.Ordinal)
+            .GroupBy(p=>p.Thread).ToDictionary(group=>group.Key,group=>group.First().Steps[0].step);
+    }
     public static object[] Read(string path="",string thread=""){return Select(path,thread).Select(p=>View(p)).ToArray();}
     public static object Get(string path,string thread){Plan p;lock(Gate)Plans.TryGetValue(Key(Presentation.DisplayPath(path),thread),out p);return p==null?null:View(p);}
     static object View(Plan p){return new{thread_id=p.Thread,path=p.Path,explanation=p.Explanation,plan=p.Steps,updated_at=p.Updated.ToString("o"),task_state=p.State,reason=p.Reason,next_action=p.Next,recovery_note=p.RecoveryNote,task=Assess(p)};}

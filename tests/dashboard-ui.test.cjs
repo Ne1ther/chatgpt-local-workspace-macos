@@ -405,7 +405,8 @@ test('dashboard', { timeout: 180000 }, async t => {
         const items = other.locator('.directory-group .thread');
         assert.equal(await items.count(), 3);
         assert.equal(new Set(await items.locator('b').allTextContents()).size, 3);
-        assert((await items.locator('.thread-sub').allTextContents()).every(text => text.startsWith('#') && text.includes('ChatGPT')));
+        assert((await items.locator('b').allTextContents()).every(text => text.startsWith('未命名会话 #')));
+        assert((await items.locator('.thread-sub').allTextContents()).every(text => text.startsWith('ChatGPT · ')));
         await other.getByRole('button', { name: '显示其余 4 个会话' }).click();
         assert.equal(await items.count(), 7);
         await other.getByRole('textbox', { name: '搜索目录或对话' }).fill('SION-1');

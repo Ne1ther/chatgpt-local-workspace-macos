@@ -2,30 +2,30 @@
 
 [项目目录与构建入口](docs/PROJECT-LAYOUT.md) · 工作台按工作目录归组，对话单独列出。
 
-这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的社区 macOS 移植 Fork，保留上游工具核心、历史和 MIT 署名。**当前源码：Mac 应用 1.6.2 · 上游核心 2.4.1 · 23 个公开 MCP 工具（另兼容 5 个旧名称）。** 非 OpenAI 官方应用，也不是原作者发布的 macOS 产品。
+这是 [CSL19980820/chatgpt-local-workspace](https://github.com/CSL19980820/chatgpt-local-workspace) 的社区 macOS 移植 Fork，保留上游工具核心、历史和 MIT 署名。**当前源码为 Mac 应用 1.8.1（build 17），核心 2.4.1，提供 25 个公开 MCP 工具和 5 个兼容名称。** 非 OpenAI 官方应用。
 
-当前已发布安装包仍为 **1.4.1 / 核心 2.3.0**；使用 1.6.2 请按下方步骤从源码构建。
+GitHub Release 提供 **1.7.0** 安装包。使用 1.8.1 请从源码构建。
 
-原生 SwiftUI 界面、内嵌实时工作台、菜单栏和 Dock 独立开关、关窗后台连接；原创暖白石墨图标。同步上游文件历史/撤销重做、命令去重、输出分页、持久计划和 Git 审阅功能。
+原生 SwiftUI 界面提供 Web Pro 咨询、报告预览、实时工作台和菜单栏。关闭主窗口后连接仍可在后台运行。T3 可以通过隐藏 Preview 标签页发起咨询，等 Mac 收到并核验回执后继续任务。 [T3 编排说明](README.macos.md#在-t3-编排中后台发起)
 
 ## macOS 快速开始
 
 **直接下载安装包，不需要自己编译：**
 
-1. 打开 **[macOS 1.4.1 下载](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.4.1)**，在 Assets 中下载 `ChatGPT-Codex-Workspace-1.4.1-arm64.dmg`（Apple Silicon：M1/M2/M3/M4 等）。也提供 ZIP 和 SHA256 校验文件；不要把 GitHub 自动生成的 Source code 当作安装包。
+1. 打开 **[macOS 1.7.0 下载](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.7.0)**，在 Assets 中下载 `ChatGPT-Codex-Workspace-1.7.0-arm64.dmg`。同处提供 ZIP 和 SHA-256 校验文件。
 2. 打开 DMG，将 **ChatGPT Codex Workspace** 拖入 **Applications（应用程序）**，然后从应用程序或 Spotlight 启动。
 3. 在“连接与显示”中填写你自己的 Tunnel ID 和运行密钥，再按 [连接说明](README.macos.md#连接-chatgpt) 配置 ChatGPT 插件。
 
 - 使用安装包**无需 Xcode、Node、Python 或 .NET**。执行 Git 等开发命令仍需要本机已有相应工具。
 - 安装位置：`/Applications/ChatGPT Codex Workspace.app`。Tunnel ID 和已有运行密钥在“连接与显示”中配置，API Key 保存在 macOS 钥匙串。
-- 安装包面向 **Apple Silicon、macOS 14 或更高版本**；尚不提供经过验证的 Intel 安装包。构建为 ad-hoc 签名，尚未 Developer ID 签名/公证；若首次打开被拦截，在确认来源后按 [首次打开说明](README.macos.md#首次打开与-macos-安全提示) 操作。
-- 1.4.1 的本地 28 工具、可靠性/重启恢复、协议与浏览器回归已有验证记录；1.6.2 的验证范围见 [macOS 使用说明](README.macos.md#已完成的验证)。真实 ChatGPT / 6 Pro 对话调用仍取决于宿主和账号支持，不把隧道就绪当作实际调用成功。
+- 安装包面向 **Apple Silicon、macOS 14 或更高版本**。若首次打开被系统拦截，在确认来源后按 [首次打开说明](README.macos.md#首次打开与-macos-安全提示) 操作。
+- 1.8.1 的安装和真实 GPT-6 Pro 回传已在 Apple Silicon Mac 上验证。 [验收记录](VERIFICATION.md)
 
 完整连接、构建、验证与恢复范围见 **[macOS 使用说明](README.macos.md)**。
 
 ### 开发者：从源码构建
 
-使用当前 1.6.2 源码或参与开发时需要编译。需要 Xcode Command Line Tools / Swift 和 Node/npm；脚本管理项目内的 .NET SDK 与官方 Tunnel Client。
+构建当前源码需要 Xcode Command Line Tools / Swift 和 Node/npm。构建脚本下载项目所需的 .NET SDK 与官方 Tunnel Client。
 
 ```sh
 git clone https://github.com/Ne1ther/chatgpt-local-workspace-macos.git

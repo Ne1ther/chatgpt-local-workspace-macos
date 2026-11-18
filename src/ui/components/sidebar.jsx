@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon, SpinIcon } from './icons.jsx';
 import { since } from '@/lib/format.js';
-import { groupDirectories, conversationLabel, conversationSummary } from '@/lib/directories.js';
+import { groupDirectories, conversationIdentity, conversationLabel, conversationSummary } from '@/lib/directories.js';
 
 // The app mark, hand-tuned at 20px: an obsidian-titanium rounded tile holding the Conduit Vault —
 // left local bracket "[", top-right cloud portal "┐", sapphire ">" chevron, and cyan "_" live baseline.
@@ -28,10 +28,10 @@ function Sub({ source, stats, now }) {
   return <span className="thread-sub">{parts.map((part, index) => [index ? <i key={'d' + index} className="sep">·</i> : null, part])}</span>;
 }
 
-function Row({ id, title, icon, initial, active, stats, total, now, rail, onClick, pressed = true, source, sub = false, subtitle, trail = null }) {
+function Row({ id, title, tooltip, icon, initial, active, stats, total, now, rail, onClick, pressed = true, source, sub = false, subtitle, trail = null }) {
   const button = (
     <button type="button" id={id} className={cn('thread', active && 'active', sub && 'two-line')} aria-label={title}
-      title={rail ? undefined : title} aria-pressed={pressed ? !!active : undefined} onClick={onClick}>
+      title={rail ? undefined : tooltip || title} aria-pressed={pressed ? !!active : undefined} onClick={onClick}>
       <span className="thread-glyph">{icon ? <Icon name={icon} /> : <><Icon name="chat" className="glyph-icon" /><span className="thread-initial">{initial}</span></>}</span>
       <span className="thread-text">
         <b>{title}</b>
@@ -92,7 +92,7 @@ export function Sidebar({ conversations, thread, collapsed, rail: railAuto, load
             <span className="directory-count tabular">{directory.conversations.length}</span><Icon name="chevronRight" size={12} />
           </button> : null}
           {rail || !closed.has(directory.id) ? visible.map(item => (
-          <Row key={item.thread_id} title={conversationLabel(item, directory.conversations)} icon="chat" sub subtitle={conversationSummary(item)}
+          <Row key={item.thread_id} title={conversationLabel(item)} tooltip={conversationLabel(item) + '\n' + conversationIdentity(item)} icon="chat" sub subtitle={conversationSummary(item)}
             source={sources[item.thread_id]} active={item.thread_id === thread} stats={stats && stats[item.thread_id]} now={now} rail={rail}
             onClick={() => pick(item.thread_id)} />
           )) : null}

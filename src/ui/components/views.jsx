@@ -325,7 +325,7 @@ function ConsultView({ row }) {
               ))}</div>
             : null}
         </CodeBlock>
-        <Note>Web Pro 读取资料包后，咨询状态会变为「Web Pro 读取中」；提交报告后变为「报告已归档」。</Note>
+        <Note>网页调用读取工具后，咨询会显示「等待报告」。报告写回后显示「报告已归档」。</Note>
       </>
     );
   }

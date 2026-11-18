@@ -296,7 +296,7 @@ Git 仓库首次打开时会建立私有审阅基准，结果见 `review.availab
 
 可选 `consult_id` 从已暂存会话加载文件；也可提供 `bundle_path`（绝对 JSON 清单/普通文件路径，或内联 JSON）、`paths`（最多 20 个绝对文件路径）与可选 `file_offsets`（`{ [path]: nonNegativeInt }`，按字节偏移从上次截断处无损续读）。清单支持 `paths: [string]`、`files: [{path}]`、`brief`，以及 `title`、`instructions`、`inbox_dir`。合并去重后最多 20 个文件。
 
-`max_bytes_per_file` 默认 65536，范围 1024–262144；`total_max_bytes` 默认 393216，范围 4096–1048576。返回 `consult_id, title, instructions, inbox_dir, file_count, total_bytes, truncated_count, bundle_sha256, files`；每个文件包含 `path, size_bytes, line_count, offset_bytes, next_offset_bytes, truncated, sha256, content`（读完时 `next_offset_bytes` 为 `null`，未读完时返回下一段安全 UTF-8 起始字节偏移）。内容为 UTF-8 文本，起止切分自动对齐多字节字符边界，预算以返回内容字节计；文件大小、行数、SHA-256 对应完整原文件。资料包 SHA-256 对应按顺序序列化的路径、完整大小和摘要清单；它可用于比较暂存与读取时文件是否变化。更新独立会话及全局状态为 reading，记录时间和 thread_id，权限边界与 read_file 相同。
+`max_bytes_per_file` 默认 65536，范围 1024–262144。`total_max_bytes` 默认 393216，范围 4096–1048576。返回 `consult_id, title, instructions, inbox_dir, file_count, total_bytes, truncated_count, bundle_sha256, files`。每个文件包含 `path, size_bytes, line_count, offset_bytes, next_offset_bytes, truncated, sha256, content`。以 `truncated` 判定是否还需读取。读完时 `next_offset_bytes` 为 `0`，同一资料包续读时将已读完文件的偏移设为 `size_bytes`。内容以 UTF-8 返回，截断位置对齐字符边界，预算按返回字节数计算。文件大小、行数和 SHA-256 对应完整文件。资料包 SHA-256 对应有序的路径、大小和文件摘要清单，可比较暂存与读取时的身份。读取会记录时间与 `thread_id`，并将状态更新为 `reading`。权限边界与 `read_file` 相同。
 
 ### `submit_pro_report`（非破坏性写入）
 
@@ -304,4 +304,4 @@ Git 仓库首次打开时会建立私有审阅基准，结果见 `review.availab
 
 创建 `<id>.md`，已有同内容报告复用收据；不同内容创建 `<id>__<UTC时间>.md`，同秒冲突继续加序号。结构附件为 `<stem>.structured.json`，收据为 `<stem>.receipt.json`。所有文件新建写入，绝不覆盖已有报告/附件/收据。返回 `consult_id, title, summary, report_path, receipt_path, structured_json_path, sha256, byte_length, line_count, created_at, thread_id`。收据原子镜像至 consult-v1/receipts，状态更新为 completed。两工具均声明 destructiveHint=false、idempotentHint=true、openWorldHint=false；仅阅读工具 readOnlyHint=true。
 
-CLI 交接示例及等待退出码见 [macOS 使用说明](../README.macos.md#t3-code--chatgpt-web-pro-咨询170)。
+CLI 交接示例及等待退出码见 [macOS 使用说明](../README.macos.md#在-t3-编排中后台发起)。

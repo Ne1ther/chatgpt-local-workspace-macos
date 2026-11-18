@@ -1,20 +1,20 @@
 # macOS community fork
 
-This fork adds a native macOS app (**current source: Mac 1.6.2 / upstream core 2.4.1, 23 public tools plus 5 legacy aliases**). See [macOS setup and build instructions](README.macos.md). Original Windows documentation and MIT attribution are preserved below. This is not an official OpenAI application.
+This community fork adds a native macOS app. The current source is **macOS 1.8.1 (build 17)** with core 2.4.1, 25 public MCP tools, and 5 legacy aliases. The Windows documentation and MIT attribution are preserved below. [macOS setup and build instructions](README.macos.md)
 
-The current published package remains **1.4.1 / core 2.3.0**; build from source to use 1.6.2.
+GitHub Releases provides the **1.7.0** installer. Build from source for 1.8.1. The current source supports sending Web Pro consultations through a hidden T3 Preview tab and resuming from a verified local report. [Workflow and verification](README.macos.md#在-t3-编排中后台发起)
 
 ## Download for macOS — no build required
 
-1. Open **[the macOS 1.4.1 release](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.4.1)** and download `ChatGPT-Codex-Workspace-1.4.1-arm64.dmg` from Assets. ZIP and SHA256 checksums are also available. GitHub's automatic “Source code” archives are not the app.
+1. Open **[the macOS 1.7.0 release](https://github.com/Ne1ther/chatgpt-local-workspace-macos/releases/tag/macos-v1.7.0)** and download `ChatGPT-Codex-Workspace-1.7.0-arm64.dmg` from Assets. The release also contains a ZIP and SHA-256 checksums.
 2. Open the DMG and drag **ChatGPT Codex Workspace** into **Applications**, then launch it.
 3. Enter your own Tunnel ID and runtime key in the connection settings and configure the ChatGPT plugin using the [connection guide](README.macos.md#连接-chatgpt).
 
-The package is for **Apple Silicon (M-series), macOS 14 or later**. It includes the local backend and Tunnel Client; users do not need Xcode, Node, Python, or .NET. Git and other development commands still need their own installed tools. An Intel package has not been verified and is not included.
+The package is for **Apple Silicon (M-series), macOS 14 or later**. It includes the local backend and Tunnel Client. Git and other development commands use the tools installed on your Mac.
 
-This community build is ad-hoc signed, **not Developer ID signed or notarized**. If macOS blocks the first launch, check the download source and follow [Apple's Open Anyway instructions](https://support.apple.com/en-us/102445). Do not disable Gatekeeper. For updates, explicitly quit the old app and replace it with the new download; preferences and Keychain credentials remain separate from the app bundle.
+If macOS blocks the first launch, check the download source and follow Apple's Open Anyway instructions. For updates, quit the old app and replace it with the new download. Preferences and Keychain credentials live separately from the app bundle. [Apple's instructions](https://support.apple.com/en-us/102445)
 
-To use the current 1.6.2 source or contribute to development, see [the build section](README.macos.md#从源码构建).
+Build the current source with the project's macOS build script. [Build instructions](README.macos.md#从源码构建)
 
 ---
 

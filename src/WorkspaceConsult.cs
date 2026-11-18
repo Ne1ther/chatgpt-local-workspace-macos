@@ -182,7 +182,13 @@ static class WorkspaceConsult
             }
         }
     }
-    static string WebPrompt(string id){return "Call read_research_bundle with consult_id="+Json.Serialize(id)+". Follow its instructions, inspect all files and disclose truncation or missing evidence. Submit your complete Markdown report through submit_pro_report with consult_id="+Json.Serialize(id)+"; include a concise summary. Return the saved report path and SHA-256.";}
+    static string WebPrompt(string id)
+    {
+        string quoted=Json.Serialize(id);
+        return "Use the Local Workspace Mac plugin to call read_research_bundle with consult_id="+quoted+
+            ". Follow the bundle instructions. If a file is truncated, call again with file_offsets mapping each absolute path to its next_offset_bytes, and set the offset of each finished file to its size_bytes. Disclose missing evidence. "+
+            "Call submit_pro_report with the same consult_id, complete Markdown content and a concise summary. Use the staged inbox. Return the saved report path and SHA-256. If a tool is unavailable, report the error and ask to refresh the plugin tools.";
+    }
     static object Value(IDictionary<string,object> map,string key,object fallback){object value;return map.TryGetValue(key,out value)?value:fallback;}
     static Dictionary<string,object> DashboardReceipt(Dictionary<string,object> receipt)
     {
@@ -190,10 +196,10 @@ static class WorkspaceConsult
         var result=new Dictionary<string,object>();foreach(string key in new[]{"report_path","receipt_path","structured_json_path","sha256","summary","created_at"})result[key]=Text(receipt,key);
         result["byte_length"]=Value(receipt,"byte_length",0);result["line_count"]=Value(receipt,"line_count",0);return result;
     }
-    public static object[] DashboardList(bool compact)
+    public static Dictionary<string,object>[] DashboardList(bool compact)
     {
         lock(Gate){
-            string root=Root(false);if(!Directory.Exists(root))return new object[0];WorkspaceJournal.SafePath(root);
+            string root=Root(false);if(!Directory.Exists(root))return new Dictionary<string,object>[0];WorkspaceJournal.SafePath(root);
             var ids=new HashSet<string>(StringComparer.Ordinal);
             foreach(string folder in new[]{"sessions","receipts"}){string dir=Path.Combine(root,folder);if(!Directory.Exists(dir))continue;WorkspaceJournal.SafePath(dir);foreach(string file in Directory.GetFiles(dir,"*.json"))ids.Add(Path.GetFileNameWithoutExtension(file));}
             var entries=new List<Dictionary<string,object>>();
@@ -207,7 +213,7 @@ static class WorkspaceConsult
                     item["sort_at"]=new[]{Text(session,"staged_at"),Text(session,"last_read_at"),Text(receipt,"created_at")}.OrderByDescending(x=>x,StringComparer.Ordinal).First();entries.Add(item);
                 }catch(Exception ex){if(!(ex is IOException||ex is UnauthorizedAccessException||ex is ArgumentException||ex is InvalidOperationException))throw;}
             }
-            var recent=entries.OrderByDescending(e=>Text(e,"sort_at"),StringComparer.Ordinal).ThenBy(e=>Text(e,"consult_id"),StringComparer.Ordinal).Take(20).ToArray();foreach(var item in recent)item.Remove("sort_at");return recent.Cast<object>().ToArray();
+            var recent=entries.OrderByDescending(e=>Text(e,"sort_at"),StringComparer.Ordinal).ThenBy(e=>Text(e,"consult_id"),StringComparer.Ordinal).Take(20).ToArray();foreach(var item in recent)item.Remove("sort_at");return recent;
         }
     }
     public static object ReadReport(string id)

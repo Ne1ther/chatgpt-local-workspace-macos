@@ -19,7 +19,7 @@ struct ActivityView: View {
                 Picker("对话", selection: $thread) {
                     Text("全部对话").tag("")
                     Text("未归属").tag("unassigned")
-                    ForEach(store.conversations) { Text($0.displayTitle(among: store.conversations) + " · " + $0.shortCode).tag($0.id) }
+                    ForEach(store.conversations) { Text($0.readableTitle + " · " + ($0.createdLabel ?? $0.sourceLabel)).tag($0.id) }
                 }
                 .frame(maxWidth: 260)
                 Spacer(minLength: 8)

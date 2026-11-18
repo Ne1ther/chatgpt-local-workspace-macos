@@ -349,7 +349,8 @@ static class WorkspaceServer
     {
         object[] commands;
         lock(CommandsGate)commands=Commands.Values.Select(c=>new{running=!c.Process.HasExited}).ToArray();
-        return new{version=Version,activity=WorkspaceActivity.ReadNative(),conversations=WorkspaceThreads.List(),commands=commands,consults=WorkspaceConsult.DashboardList(true)};
+        var consults=WorkspaceConsult.DashboardList(true);
+        return new{version=Version,activity=WorkspaceActivity.ReadNative(),conversations=WorkspaceThreads.List(consults:consults),commands=commands,consults=consults};
     }
     static object LiveSnapshot(Dictionary<string,object> args, bool local=false)
     {
@@ -358,7 +359,8 @@ static class WorkspaceServer
         WorkspaceActivity.Seen(S(args,"viewer_id"),path,S(args,"bridge","standard"),S(args,"display_mode","unknown"));
         var commands=new List<object>();int omitted=0;
         lock(CommandsGate){var selected=Commands.Where(x=>!x.Value.LogsCleared&&WorkspaceActivity.Within(Presentation.DisplayPath(x.Value.Cwd).TrimEnd('/'),path)&&(thread.Length==0||x.Value.ThreadId==thread)).OrderBy(x=>x.Value.Process.HasExited).ThenByDescending(x=>x.Value.Started).ToArray();omitted=Math.Max(0,selected.Length-8);foreach(var pair in selected.Take(8)){var c=pair.Value;lock(c.Gate){bool done=c.Process.HasExited;int start=Math.Max(0,c.History.Length-8000);commands.Add(new{thread_id=c.ThreadId,started_at=c.Started.ToString("o"),session_id=pair.Key,command=c.Text,cwd=Presentation.DisplayPath(c.Cwd),shell=c.Shell,running=!done,exit_code=done?(int?)c.Process.ExitCode:null,elapsed_seconds=Math.Round(((done?c.Process.ExitTime.ToUniversalTime():DateTime.UtcNow)-c.Started).TotalSeconds,1),output=c.History.ToString(start,c.History.Length-start),truncated=c.HistoryTruncated||start>0,timed_out=c.TimedOut,stopped=c.Stopped});}}}
-        return new{version=Version,instance_id=InstanceId,dashboard_url=LocalDashboard.Url,conversations=WorkspaceThreads.List(RunningCommandsFor),thread_id=thread,path=path,checked_at=DateTime.UtcNow.ToString("o"),default_shell=WorkspaceContext.DefaultShell,activity=WorkspaceActivity.Read(path,thread,!local),plans=WorkspaceContext.PlansWithin(path,thread),commands=commands,consults=local?WorkspaceConsult.DashboardList(false):null,omitted_commands=omitted,queued_calls=Work.Count,ui=WorkspaceActivity.Diagnostics(path),scope="仅当前 MCP 进程与此目录及子目录。没有工具调用不代表模型已完成；模型思考不可见。历史上限 100 条，命令输出为尾部快照；每条调用附带有界的结构化详情。"};
+        var consults=local?WorkspaceConsult.DashboardList(false):null;
+        return new{version=Version,instance_id=InstanceId,dashboard_url=LocalDashboard.Url,conversations=WorkspaceThreads.List(RunningCommandsFor,consults),thread_id=thread,path=path,checked_at=DateTime.UtcNow.ToString("o"),default_shell=WorkspaceContext.DefaultShell,activity=WorkspaceActivity.Read(path,thread,!local),plans=WorkspaceContext.PlansWithin(path,thread),commands=commands,consults=consults,omitted_commands=omitted,queued_calls=Work.Count,ui=WorkspaceActivity.Diagnostics(path),scope="仅当前 MCP 进程与此目录及子目录。没有工具调用不代表模型已完成；模型思考不可见。历史上限 100 条，命令输出为尾部快照；每条调用附带有界的结构化详情。"};
     }
     static Dictionary<string,object> PrepareCall(Dictionary<string,object> call)
     {

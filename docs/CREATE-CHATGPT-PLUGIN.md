@@ -39,9 +39,9 @@ API Key 继续留在 Mac 钥匙串中。网页使用 Tunnel ID，不填写本机
 然后打开本地工作区 <项目绝对路径> README.macos.md 前 10 行，不修改文件。
 ```
 
-macOS 1.6.0 源码构建的预期返回为核心版本 `2.4.1`、公开工具 `23` 个、默认 shell `zsh`。现有 1.4.1 Release 安装包为核心 `2.3.0`、28 个工具。网页登记版本与本机应用、核心版本分别管理，请以实际响应为准。
+macOS 1.8.1 的预期返回为核心版本 `2.4.1`、公开工具 `25` 个、默认 shell `zsh`。网页插件、本机应用和核心各自管理版本，请以实际响应为准。
 
-若工具数量不符，在该连接的工具详情中 **Refresh / 刷新工具**，再用新对话测试。若创建页看不到 Tunnel，核对 ChatGPT 账号/工作区与 Tunnel 的关联和 Use 权限。
+若网页在调用 `read_research_bundle` 或 `submit_pro_report` 时提示 `is not a function`，打开「插件设置 → Local Workspace Mac → 刷新工具」，然后在新 Pro 对话中重新选用该插件。验收时核对本地报告与回执的 SHA-256。若创建页看不到 Tunnel，核对 ChatGPT 账号/工作区与 Tunnel 的关联和 Use 权限。
 
 ## 4. 图标
 
